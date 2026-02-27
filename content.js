@@ -81,6 +81,7 @@
   const STORAGE_KEY = "overlaySettings";
   const MODE_KEYS = ["fullscreen", "theater", "normal"];
   const PANEL_STATE_KEYS = ["open", "closed"];
+  const EDIT_DUMMY_ID_PREFIX = "__yt_edit_dummy__";
   const OFFSET_MAX_X_BASE = 1920;
   const OFFSET_MAX_Y_BASE = 1080;
 
@@ -204,7 +205,10 @@
       host: null,
       hostOriginalPosition: null,
       dragHandle: null,
-      dragFrame: null
+      dragFrame: null,
+      editButton: null,
+      controlsHost: null,
+      blockHost: null
     },
     chatSourceObserver: null,
     pageObserver: null,
@@ -226,12 +230,14 @@
     hiddenChatEndpointIndex: 0,
     hiddenChatCreatedAt: 0,
     hiddenChatLoadPending: false,
+    editDummySeq: 0,
     expiredMessageIds: [],
     expiredMessageIdSet: new Set(),
     expireDrainTimer: 0,
     configSaveTimer: 0,
     dragState: {
       active: false,
+      editModeEnabled: false,
       pointerId: null,
       mode: "fullscreen",
       panelState: "closed",
@@ -243,6 +249,52 @@
     flushRaf: 0,
     syncRaf: 0
   };
+
+  let parserApi = null;
+  let rendererApi = null;
+
+  function getParserApi() {
+    if (parserApi) {
+      return parserApi;
+    }
+
+    const parserNamespace =
+      typeof window !== "undefined" ? window.YTChatOverlayParser : null;
+    const createParser = parserNamespace && parserNamespace.create;
+    if (typeof createParser !== "function") {
+      console.error("[yt-chat-overlay] parser module is missing.");
+      return null;
+    }
+
+    parserApi = createParser({
+      rendererSelector: RENDERER_SELECTOR,
+      typeInfo: TYPE_INFO,
+      getCurrentModeProfile,
+      hasSeenId: (id) => state.seenMessageIds.has(id),
+      markSeenId
+    });
+    return parserApi;
+  }
+
+  function getRendererApi() {
+    if (rendererApi) {
+      return rendererApi;
+    }
+
+    const rendererNamespace =
+      typeof window !== "undefined" ? window.YTChatOverlayRenderer : null;
+    const createRenderer = rendererNamespace && rendererNamespace.create;
+    if (typeof createRenderer !== "function") {
+      console.error("[yt-chat-overlay] renderer module is missing.");
+      return null;
+    }
+
+    rendererApi = createRenderer({
+      typeInfo: TYPE_INFO,
+      getCurrentModeProfile
+    });
+    return rendererApi;
+  }
 
   function clampNumber(value, min, max, fallback) {
     const numeric = Number(value);
@@ -578,10 +630,88 @@
     return "normal";
   }
 
+  function isElementVisiblyDisplayed(node) {
+    if (!(node instanceof Element)) {
+      return false;
+    }
+
+    if (node.hasAttribute("hidden")) {
+      return false;
+    }
+
+    const ariaHidden = String(node.getAttribute("aria-hidden") || "").toLowerCase();
+    if (ariaHidden === "true") {
+      return false;
+    }
+
+    try {
+      const style = window.getComputedStyle(node);
+      if (!style) {
+        return false;
+      }
+      if (style.display === "none" || style.visibility === "hidden") {
+        return false;
+      }
+      if (Number(style.opacity) === 0) {
+        return false;
+      }
+    } catch (_error) {
+      return false;
+    }
+
+    const rect = node.getBoundingClientRect();
+    if (!Number.isFinite(rect.width) || !Number.isFinite(rect.height)) {
+      return false;
+    }
+    if (rect.width < 40 || rect.height < 40) {
+      return false;
+    }
+
+    const vw = Math.max(window.innerWidth || 0, document.documentElement.clientWidth || 0);
+    const vh = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
+    if (vw > 0 && vh > 0) {
+      if (rect.right <= 0 || rect.bottom <= 0 || rect.left >= vw || rect.top >= vh) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function isChatContainerCollapsed(node) {
+    if (!(node instanceof Element)) {
+      return false;
+    }
+
+    const collapsedAttr = node.getAttribute("collapsed");
+    if (
+      collapsedAttr !== null &&
+      collapsedAttr !== "" &&
+      collapsedAttr !== "false" &&
+      collapsedAttr !== "0"
+    ) {
+      return true;
+    }
+
+    if (node.matches("[collapsed]") || node.classList.contains("collapsed")) {
+      return true;
+    }
+
+    return false;
+  }
+
   function getCurrentChatPanelState() {
+    const chatContainer = findChatContainer();
+    if (isChatContainerCollapsed(chatContainer)) {
+      return "closed";
+    }
+
     const nativeIframe = findChatIframe();
-    const nativeItemsNode = getChatItemsNode(nativeIframe);
-    return nativeItemsNode ? "open" : "closed";
+    if (!isElementVisiblyDisplayed(nativeIframe)) {
+      return "closed";
+    }
+
+    return "open";
   }
 
   function getModeProfile(mode, panelState) {
@@ -827,9 +957,62 @@
     }
   }
 
+  function updateEditButtonVisualState() {
+    const button = state.overlayUI.editButton;
+    if (!button) {
+      return;
+    }
+
+    const enabled = Boolean(state.dragState.editModeEnabled);
+    button.setAttribute("aria-pressed", enabled ? "true" : "false");
+    button.textContent = enabled ? "編集ON" : "編集";
+    button.style.color = enabled ? "#66d9ff" : "#ffffff";
+    button.style.textShadow = enabled
+      ? "0 0 8px rgba(88, 217, 255, 0.55)"
+      : "0 0 6px rgba(0, 0, 0, 0.45)";
+  }
+
+  function syncEditModeUiState() {
+    const handle = state.overlayUI.dragHandle;
+    const frame = state.overlayUI.dragFrame;
+    const enabled = Boolean(state.dragState.editModeEnabled);
+
+    if (handle) {
+      handle.style.pointerEvents = enabled ? "auto" : "none";
+      handle.style.cursor = state.dragState.active ? "grabbing" : "grab";
+    }
+
+    if (frame) {
+      frame.style.display = enabled || state.dragState.active ? "block" : "none";
+    }
+
+    updateEditButtonVisualState();
+  }
+
+  function setEditModeEnabled(enabled) {
+    const next = Boolean(enabled);
+    if (state.dragState.editModeEnabled === next) {
+      syncEditModeUiState();
+      return;
+    }
+
+    if (!next && state.dragState.active) {
+      endOffsetDrag();
+    }
+
+    state.dragState.editModeEnabled = next;
+    syncEditModeUiState();
+    if (next) {
+      revealHistoryDuringDrag();
+    }
+    applyOverlayLayoutStyles();
+    syncEditDummyRows();
+  }
+
   function endOffsetDrag() {
     const drag = state.dragState;
     if (!drag.active) {
+      syncEditModeUiState();
       return;
     }
 
@@ -849,9 +1032,7 @@
     if (handle) {
       handle.style.cursor = "grab";
     }
-    if (state.overlayUI.dragFrame) {
-      state.overlayUI.dragFrame.style.display = "none";
-    }
+    syncEditModeUiState();
 
     for (const row of state.messageNodes.values()) {
       if (row && row.dataset) {
@@ -860,11 +1041,15 @@
     }
     triggerSequentialFadeOutForVisibleMessages();
     applyOverlayLayoutStyles();
+    syncEditDummyRows();
     queueConfigSave(0);
   }
 
   function onDragHandlePointerDown(event) {
     if (!state.isActive) {
+      return;
+    }
+    if (!state.dragState.editModeEnabled) {
       return;
     }
     if (!(event instanceof PointerEvent)) {
@@ -900,9 +1085,7 @@
       handle.style.cursor = "grabbing";
     }
 
-    if (state.overlayUI.dragFrame) {
-      state.overlayUI.dragFrame.style.display = "block";
-    }
+    syncEditModeUiState();
     revealHistoryDuringDrag();
     syncDragOverlayLayout();
     event.preventDefault();
@@ -1006,6 +1189,106 @@
     syncDragOverlayLayout();
   }
 
+  function findEditButtonHost(host) {
+    if (!host) {
+      return null;
+    }
+
+    const selectors = [
+      ".ytp-chrome-controls .ytp-right-controls",
+      ".ytp-right-controls",
+      ".ytp-chrome-controls .ytp-left-controls",
+      ".ytp-left-controls"
+    ];
+
+    for (const selector of selectors) {
+      const node = host.querySelector(selector);
+      if (node instanceof Element) {
+        return node;
+      }
+    }
+
+    return null;
+  }
+
+  function onEditButtonClick(event) {
+    if (event instanceof Event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    if (!state.isActive) {
+      return;
+    }
+
+    setEditModeEnabled(!state.dragState.editModeEnabled);
+  }
+
+  function isEditUiEventTarget(target) {
+    if (!(target instanceof Element)) {
+      return false;
+    }
+
+    return Boolean(
+      target.closest("#yt-chat-overlay-edit-button") ||
+        target.closest("#yt-chat-overlay-drag-handle")
+    );
+  }
+
+  function onPlayerInteractionCapture(event) {
+    if (!state.dragState.editModeEnabled) {
+      return;
+    }
+    if (state.dragState.active) {
+      return;
+    }
+    if (isEditUiEventTarget(event.target)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === "function") {
+      event.stopImmediatePropagation();
+    }
+  }
+
+  function bindPlayerInteractionBlocker(host) {
+    if (!(host instanceof Element)) {
+      return;
+    }
+    if (state.overlayUI.blockHost === host) {
+      return;
+    }
+    if (state.overlayUI.blockHost) {
+      unbindPlayerInteractionBlocker();
+    }
+
+    const opts = { capture: true };
+    host.addEventListener("pointerdown", onPlayerInteractionCapture, opts);
+    host.addEventListener("click", onPlayerInteractionCapture, opts);
+    host.addEventListener("dblclick", onPlayerInteractionCapture, opts);
+    host.addEventListener("touchstart", onPlayerInteractionCapture, opts);
+    host.addEventListener("touchend", onPlayerInteractionCapture, opts);
+    state.overlayUI.blockHost = host;
+  }
+
+  function unbindPlayerInteractionBlocker() {
+    const host = state.overlayUI.blockHost;
+    if (!(host instanceof Element)) {
+      state.overlayUI.blockHost = null;
+      return;
+    }
+
+    const opts = { capture: true };
+    host.removeEventListener("pointerdown", onPlayerInteractionCapture, opts);
+    host.removeEventListener("click", onPlayerInteractionCapture, opts);
+    host.removeEventListener("dblclick", onPlayerInteractionCapture, opts);
+    host.removeEventListener("touchstart", onPlayerInteractionCapture, opts);
+    host.removeEventListener("touchend", onPlayerInteractionCapture, opts);
+    state.overlayUI.blockHost = null;
+  }
+
   function ensureOverlayUI() {
     const host = getPlayerHost();
     if (!host) {
@@ -1016,6 +1299,7 @@
     let lane = state.overlayUI.lane;
     let dragHandle = state.overlayUI.dragHandle;
     let dragFrame = state.overlayUI.dragFrame;
+    let editButton = state.overlayUI.editButton;
 
     if (!root) {
       root = document.createElement("div");
@@ -1039,7 +1323,7 @@
       dragHandle = document.createElement("div");
       dragHandle.id = "yt-chat-overlay-drag-handle";
       dragHandle.style.position = "absolute";
-      dragHandle.style.pointerEvents = "auto";
+      dragHandle.style.pointerEvents = "none";
       dragHandle.style.background = "rgba(0, 0, 0, 0.001)";
       dragHandle.style.cursor = "grab";
       dragHandle.style.touchAction = "none";
@@ -1062,6 +1346,30 @@
       dragFrame.style.borderRadius = "10px";
       dragFrame.style.boxShadow = "0 0 0 1px rgba(0, 0, 0, 0.85), 0 0 22px rgba(0, 0, 0, 0.45)";
       dragFrame.style.background = "rgba(255, 255, 255, 0.04)";
+
+      editButton = document.createElement("button");
+      editButton.id = "yt-chat-overlay-edit-button";
+      editButton.type = "button";
+      editButton.className = "ytp-button";
+      editButton.setAttribute("aria-label", "コメント位置編集");
+      editButton.style.width = "auto";
+      editButton.style.minWidth = "52px";
+      editButton.style.padding = "0 10px";
+      editButton.style.fontSize = "14px";
+      editButton.style.fontWeight = "700";
+      editButton.style.letterSpacing = "0.02em";
+      editButton.style.lineHeight = "36px";
+      editButton.style.position = "relative";
+      editButton.style.zIndex = "2";
+      editButton.style.pointerEvents = "auto";
+      editButton.style.userSelect = "none";
+      editButton.style.textShadow = "0 0 6px rgba(0, 0, 0, 0.45)";
+      editButton.style.color = "#ffffff";
+      editButton.textContent = "編集";
+      editButton.addEventListener("click", onEditButtonClick);
+      editButton.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+      });
     }
 
     if (state.overlayUI.host !== host) {
@@ -1073,6 +1381,13 @@
       }
       if (state.overlayUI.host && dragFrame && dragFrame.parentNode === state.overlayUI.host) {
         state.overlayUI.host.removeChild(dragFrame);
+      }
+      if (
+        state.overlayUI.controlsHost &&
+        editButton &&
+        editButton.parentNode === state.overlayUI.controlsHost
+      ) {
+        state.overlayUI.controlsHost.removeChild(editButton);
       }
 
       if (state.overlayUI.host && state.overlayUI.hostOriginalPosition !== null) {
@@ -1105,17 +1420,39 @@
       }
     }
 
+    bindPlayerInteractionBlocker(host);
+
+    const controlsHost = findEditButtonHost(host);
+    if (
+      state.overlayUI.controlsHost &&
+      state.overlayUI.controlsHost !== controlsHost &&
+      editButton &&
+      editButton.parentNode === state.overlayUI.controlsHost
+    ) {
+      state.overlayUI.controlsHost.removeChild(editButton);
+    }
+    if (controlsHost && editButton && editButton.parentNode !== controlsHost) {
+      controlsHost.appendChild(editButton);
+    }
+
     state.overlayUI.root = root;
     state.overlayUI.lane = lane;
     state.overlayUI.dragHandle = dragHandle;
     state.overlayUI.dragFrame = dragFrame;
+    state.overlayUI.editButton = editButton;
+    state.overlayUI.controlsHost = controlsHost || null;
+    syncEditModeUiState();
     applyOverlayLayoutStyles();
+    syncEditDummyRows();
   }
 
   function removeOverlayUI() {
     endOffsetDrag();
+    setEditModeEnabled(false);
+    unbindPlayerInteractionBlocker();
 
-    const { root, host, hostOriginalPosition, dragHandle, dragFrame } = state.overlayUI;
+    const { root, host, hostOriginalPosition, dragHandle, dragFrame, editButton, controlsHost } =
+      state.overlayUI;
     if (root && host && root.parentNode === host) {
       host.removeChild(root);
     }
@@ -1125,6 +1462,9 @@
     if (dragFrame && host && dragFrame.parentNode === host) {
       host.removeChild(dragFrame);
     }
+    if (editButton && controlsHost && editButton.parentNode === controlsHost) {
+      controlsHost.removeChild(editButton);
+    }
     if (host && hostOriginalPosition !== null) {
       host.style.position = hostOriginalPosition;
     }
@@ -1133,6 +1473,9 @@
     state.overlayUI.lane = null;
     state.overlayUI.dragHandle = null;
     state.overlayUI.dragFrame = null;
+    state.overlayUI.editButton = null;
+    state.overlayUI.controlsHost = null;
+    state.overlayUI.blockHost = null;
     state.overlayUI.host = null;
     state.overlayUI.hostOriginalPosition = null;
   }
@@ -1460,10 +1803,15 @@
   }
 
   function onChatMutations(mutations) {
+    const parser = getParserApi();
+    if (!parser) {
+      return;
+    }
+
     const renderers = [];
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
-        collectRendererElements(node, renderers);
+        parser.collectRendererElements(node, renderers);
       }
     }
 
@@ -1472,624 +1820,28 @@
     }
 
     for (const renderer of renderers) {
-      const message = parseRendererMessage(renderer);
+      const message = parser.parseRendererMessage(renderer);
       if (message) {
         enqueueMessage(message);
-      }
-    }
-  }
-
-  function collectRendererElements(node, output) {
-    if (!(node instanceof Element)) {
-      return;
-    }
-
-    const added = [];
-    if (node.matches(RENDERER_SELECTOR)) {
-      added.push(node);
-    }
-
-    for (const child of node.querySelectorAll(RENDERER_SELECTOR)) {
-      added.push(child);
-    }
-
-    for (const element of added) {
-      if (!output.includes(element)) {
-        output.push(element);
       }
     }
   }
 
   function ingestExistingMessages(itemsNode) {
+    const parser = getParserApi();
+    if (!parser) {
+      return;
+    }
+
     const existing = Array.from(itemsNode.querySelectorAll(RENDERER_SELECTOR));
     const profile = getCurrentModeProfile();
     const startIndex = Math.max(0, existing.length - profile.maxVisible);
     for (let i = startIndex; i < existing.length; i += 1) {
-      const message = parseRendererMessage(existing[i]);
+      const message = parser.parseRendererMessage(existing[i]);
       if (message) {
         enqueueMessage(message);
       }
     }
-  }
-
-  function mapRendererType(renderer) {
-    const tag = renderer.tagName.toLowerCase();
-    switch (tag) {
-      case "yt-live-chat-text-message-renderer":
-        return "text";
-      case "yt-live-chat-paid-message-renderer":
-        return "paid";
-      case "yt-live-chat-membership-item-renderer":
-        return "membership";
-      case "yt-live-chat-paid-sticker-renderer":
-        return "sticker";
-      case "yt-live-chat-viewer-engagement-message-renderer":
-        return "engagement";
-      case "yt-live-chat-mode-change-message-renderer":
-        return "mode_change";
-      default:
-        return "";
-    }
-  }
-
-  function getImageSource(image) {
-    if (!image) {
-      return "";
-    }
-
-    const normalizeUrl = (value) => {
-      const raw = String(value || "").trim();
-      if (!raw) {
-        return "";
-      }
-      if (
-        raw.startsWith("http://") ||
-        raw.startsWith("https://") ||
-        raw.startsWith("data:") ||
-        raw.startsWith("blob:")
-      ) {
-        return raw;
-      }
-      if (raw.startsWith("//")) {
-        return `${location.protocol}${raw}`;
-      }
-      try {
-        return new URL(raw, location.origin).toString();
-      } catch (_error) {
-        return raw;
-      }
-    };
-
-    const extractSrcsetUrl = (srcsetValue) => {
-      const srcset = String(srcsetValue || "").trim();
-      if (!srcset) {
-        return "";
-      }
-
-      const parts = srcset.split(",");
-      for (const part of parts) {
-        const candidate = part.trim().split(/\s+/)[0];
-        const normalized = normalizeUrl(candidate);
-        if (normalized) {
-          return normalized;
-        }
-      }
-      return "";
-    };
-
-    const candidates = [
-      image.currentSrc,
-      image.src,
-      image.getAttribute("src"),
-      extractSrcsetUrl(image.srcset),
-      extractSrcsetUrl(image.getAttribute("srcset")),
-      image.getAttribute("data-thumb"),
-      image.getAttribute("data-ytimg"),
-      image.getAttribute("data-src"),
-      image.getAttribute("data-lazy-src"),
-      image.getAttribute("data-image-src")
-    ];
-
-    for (const candidate of candidates) {
-      const normalized = normalizeUrl(candidate);
-      if (normalized) {
-        return normalized;
-      }
-    }
-
-    return "";
-  }
-
-  function extractCssUrl(value) {
-    const input = String(value || "");
-    const match = input.match(/url\((['"]?)(.*?)\1\)/i);
-    if (!match || !match[2]) {
-      return "";
-    }
-    return match[2];
-  }
-
-  function getEmojiElementBackgroundSource(element) {
-    if (!(element instanceof Element)) {
-      return "";
-    }
-
-    const tag = element.tagName.toLowerCase();
-    const className =
-      typeof element.className === "string" ? element.className.toLowerCase() : "";
-    const role = (element.getAttribute("role") || "").toLowerCase();
-    const isEmojiLike =
-      role === "img" ||
-      tag.includes("emoji") ||
-      className.includes("emoji") ||
-      className.includes("emote");
-
-    if (!isEmojiLike) {
-      return "";
-    }
-
-    const inlineStyleUrl = extractCssUrl(element.getAttribute("style"));
-    if (inlineStyleUrl) {
-      return inlineStyleUrl;
-    }
-
-    try {
-      const computed = window.getComputedStyle(element);
-      const computedUrl = extractCssUrl(computed ? computed.backgroundImage : "");
-      if (computedUrl) {
-        return computedUrl;
-      }
-    } catch (_error) {
-      // Ignore style access errors.
-    }
-
-    return "";
-  }
-
-  function extractText(element) {
-    if (!element) {
-      return "";
-    }
-
-    const raw = (element.innerText || element.textContent || "")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (raw) {
-      return raw;
-    }
-
-    const emoji = Array.from(element.querySelectorAll("img[alt]"))
-      .map((img) => img.getAttribute("alt") || "")
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    return emoji;
-  }
-
-  function pickFirstText(renderer, selectors) {
-    for (const selector of selectors) {
-      const element = renderer.querySelector(selector);
-      const text = extractText(element);
-      if (text) {
-        return text;
-      }
-    }
-    return "";
-  }
-
-  function normalizeAuthorName(name) {
-    const normalized = String(name || "")
-      .replace(/^@+/, "")
-      .trim();
-    return normalized || "system";
-  }
-
-  function resolveAuthorName(renderer) {
-    return normalizeAuthorName(
-      extractText(renderer.querySelector("#author-name")) ||
-        extractText(renderer.querySelector(".author-name")) ||
-        "system"
-    );
-  }
-
-  function resolveAvatarUrl(renderer) {
-    const image = renderer.querySelector(
-      "#author-photo img, img#img, yt-img-shadow img, img"
-    );
-    if (!image) {
-      return "";
-    }
-
-    return getImageSource(image);
-  }
-
-  /**
-   * @param {string} text
-   * @returns {OverlayMessageRun|null}
-   */
-  function makeTextRun(text) {
-    const value = String(text || "");
-    if (!value) {
-      return null;
-    }
-    return {
-      type: "text",
-      text: value
-    };
-  }
-
-  /**
-   * @param {string} src
-   * @param {string} alt
-   * @returns {OverlayMessageRun|null}
-   */
-  function makeEmojiRun(src, alt) {
-    const imageSrc = String(src || "");
-    if (!imageSrc) {
-      return null;
-    }
-    return {
-      type: "emoji",
-      src: imageSrc,
-      alt: String(alt || "")
-    };
-  }
-
-  /**
-   * @param {OverlayMessageRun[]} runs
-   * @returns {OverlayMessageRun[]}
-   */
-  function compactRuns(runs) {
-    const compacted = [];
-    for (const run of runs) {
-      if (!run) {
-        continue;
-      }
-
-      if (run.type === "text") {
-        const text = String(run.text || "");
-        if (!text) {
-          continue;
-        }
-
-        const prev = compacted[compacted.length - 1];
-        if (prev && prev.type === "text") {
-          prev.text = `${prev.text || ""}${text}`;
-        } else {
-          compacted.push({ type: "text", text });
-        }
-        continue;
-      }
-
-      if (run.type === "emoji" && run.src) {
-        compacted.push(run);
-      }
-    }
-    return compacted;
-  }
-
-  /**
-   * @param {Element|null} element
-   * @returns {OverlayMessageRun[]}
-   */
-  function parseRunsFromElement(element) {
-    if (!element) {
-      return [];
-    }
-
-    /** @type {OverlayMessageRun[]} */
-    const runs = [];
-
-    const walk = (node) => {
-      if (!node) {
-        return;
-      }
-
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent || "";
-        const run = makeTextRun(text);
-        if (run) {
-          runs.push(run);
-        }
-        return;
-      }
-
-      if (!(node instanceof Element)) {
-        return;
-      }
-
-      const tag = node.tagName.toLowerCase();
-      if (tag === "img") {
-        const emojiRun = makeEmojiRun(getImageSource(node), node.getAttribute("alt") || "");
-        if (emojiRun) {
-          runs.push(emojiRun);
-          return;
-        }
-
-        const altText = makeTextRun(node.getAttribute("alt") || "");
-        if (altText) {
-          runs.push(altText);
-        }
-        return;
-      }
-
-      const backgroundEmojiSrc = getEmojiElementBackgroundSource(node);
-      if (backgroundEmojiSrc) {
-        const emojiRun = makeEmojiRun(
-          backgroundEmojiSrc,
-          node.getAttribute("alt") ||
-            node.getAttribute("aria-label") ||
-            node.getAttribute("title") ||
-            ""
-        );
-        if (emojiRun) {
-          runs.push(emojiRun);
-          return;
-        }
-      }
-
-      if (tag === "br") {
-        runs.push({ type: "text", text: "\n" });
-        return;
-      }
-
-      for (const child of node.childNodes) {
-        walk(child);
-      }
-    };
-
-    walk(element);
-    return compactRuns(runs);
-  }
-
-  function buildRunsFromSelectors(renderer, selectors) {
-    for (const selector of selectors) {
-      const element = renderer.querySelector(selector);
-      if (!element) {
-        continue;
-      }
-
-      const runs = parseRunsFromElement(element);
-      if (runs.length > 0) {
-        return runs;
-      }
-
-      const text = extractText(element);
-      const fallbackRun = makeTextRun(text);
-      if (fallbackRun) {
-        return [fallbackRun];
-      }
-    }
-    return [];
-  }
-
-  /**
-   * @param {OverlayMessageRun[]} runs
-   * @returns {string}
-   */
-  function runsToPlainText(runs) {
-    const text = runs
-      .map((run) => {
-        if (run.type === "emoji") {
-          return run.alt || "";
-        }
-        return run.text || "";
-      })
-      .join("");
-
-    return text.replace(/\s+/g, " ").trim();
-  }
-
-  function resolveAuthorBadges(renderer) {
-    /** @type {OverlayAuthorBadge[]} */
-    const badges = [];
-    const seen = new Set();
-
-    for (const badgeNode of renderer.querySelectorAll("yt-live-chat-author-badge-renderer")) {
-      const image = badgeNode.querySelector("img");
-      const iconUrl = getImageSource(image);
-      const label =
-        badgeNode.getAttribute("aria-label") ||
-        badgeNode.getAttribute("shared-tooltip-text") ||
-        badgeNode.getAttribute("type") ||
-        (image ? image.getAttribute("alt") || "" : "") ||
-        "";
-
-      const key = `${iconUrl}|${label}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-
-      if (iconUrl || label) {
-        badges.push({ iconUrl, label });
-      }
-    }
-
-    return badges;
-  }
-
-  function resolveMessageRuns(renderer, type) {
-    /** @type {OverlayMessageRun[]} */
-    const runs = [];
-
-    if (type === "paid") {
-      const amount = pickFirstText(renderer, [
-        "#purchase-amount",
-        "#purchase-amount-chip",
-        ".purchase-amount-chip"
-      ]);
-      const amountRun = makeTextRun(amount ? `${amount} ` : "");
-      if (amountRun) {
-        runs.push(amountRun);
-      }
-
-      runs.push(...buildRunsFromSelectors(renderer, ["#message", ".message"]));
-      return compactRuns(runs);
-    }
-
-    if (type === "membership") {
-      const header = pickFirstText(renderer, ["#header-subtext", "#header-primary-text"]);
-      const headerRun = makeTextRun(header ? `${header} ` : "");
-      if (headerRun) {
-        runs.push(headerRun);
-      }
-
-      runs.push(...buildRunsFromSelectors(renderer, ["#message", ".message"]));
-      return compactRuns(runs);
-    }
-
-    if (type === "sticker") {
-      const amount = pickFirstText(renderer, [
-        "#purchase-amount-chip",
-        "#purchase-amount",
-        ".purchase-amount-chip"
-      ]);
-      const amountRun = makeTextRun(amount ? `${amount} ` : "");
-      if (amountRun) {
-        runs.push(amountRun);
-      }
-      runs.push(...buildRunsFromSelectors(renderer, ["#message", "#sticker", ".message"]));
-      return compactRuns(runs);
-    }
-
-    if (type === "engagement" || type === "mode_change") {
-      runs.push(...buildRunsFromSelectors(renderer, ["#message", "#text"]));
-      return compactRuns(runs);
-    }
-
-    runs.push(...buildRunsFromSelectors(renderer, ["#message", ".message"]));
-    return compactRuns(runs);
-  }
-
-  function resolveAccentColor(renderer, type) {
-    const authorNode = renderer.querySelector("#author-name");
-    const typeInfo = TYPE_INFO[type] || TYPE_INFO.text;
-
-    try {
-      if (authorNode) {
-        const authorColor = window.getComputedStyle(authorNode).color;
-        if (authorColor && authorColor !== "rgba(0, 0, 0, 0)") {
-          return authorColor;
-        }
-      }
-
-      if (type === "paid") {
-        const paidColor = window
-          .getComputedStyle(renderer)
-          .getPropertyValue("--yt-live-chat-paid-message-primary-color")
-          .trim();
-        if (paidColor) {
-          return paidColor;
-        }
-      }
-    } catch (_error) {
-      return typeInfo.fallbackColor;
-    }
-
-    return typeInfo.fallbackColor;
-  }
-
-  function resolveMessageText(renderer, type) {
-    switch (type) {
-      case "text":
-        return pickFirstText(renderer, ["#message", ".message"]);
-      case "paid": {
-        const amount = pickFirstText(renderer, [
-          "#purchase-amount",
-          "#purchase-amount-chip",
-          ".purchase-amount-chip"
-        ]);
-        const body = pickFirstText(renderer, ["#message", ".message"]);
-        return [amount, body].filter(Boolean).join(" ");
-      }
-      case "membership": {
-        const header = pickFirstText(renderer, [
-          "#header-subtext",
-          "#header-primary-text"
-        ]);
-        const body = pickFirstText(renderer, ["#message", ".message"]);
-        return [header, body].filter(Boolean).join(" ");
-      }
-      case "sticker": {
-        const amount = pickFirstText(renderer, [
-          "#purchase-amount-chip",
-          "#purchase-amount",
-          ".purchase-amount-chip"
-        ]);
-        const sticker = pickFirstText(renderer, ["#sticker", "#message"]);
-        return [amount, sticker].filter(Boolean).join(" ");
-      }
-      case "engagement":
-      case "mode_change":
-        return pickFirstText(renderer, ["#message", "#text"]);
-      default:
-        return "";
-    }
-  }
-
-  function resolveTimestampToken(renderer, timestampMs) {
-    const token = pickFirstText(renderer, ["#timestamp", ".timestamp"]);
-    if (token) {
-      return token;
-    }
-
-    return String(Math.floor(timestampMs / 1000));
-  }
-
-  function buildMessageId(renderer, type, authorName, text, timestampToken) {
-    const directId =
-      renderer.getAttribute("data-id") ||
-      renderer.getAttribute("data-item-id") ||
-      renderer.getAttribute("data-message-id") ||
-      renderer.getAttribute("id");
-
-    if (directId && directId !== "message") {
-      return `${type}|${directId}`;
-    }
-
-    return `${type}|${authorName}|${text}|${timestampToken}`;
-  }
-
-  /**
-   * @param {Element} renderer
-   * @returns {OverlayMessage|null}
-   */
-  function parseRendererMessage(renderer) {
-    const type = mapRendererType(renderer);
-    if (!type) {
-      return null;
-    }
-
-    const authorName = resolveAuthorName(renderer);
-    const timestampMs = Date.now();
-    const messageRuns = resolveMessageRuns(renderer, type);
-    const runsText = runsToPlainText(messageRuns);
-    const rawText = runsText || resolveMessageText(renderer, type);
-    const label = TYPE_INFO[type] ? TYPE_INFO[type].label : "";
-    const text = rawText || label || "";
-    const timestampToken = resolveTimestampToken(renderer, timestampMs);
-    const id = buildMessageId(renderer, type, authorName, text, timestampToken);
-
-    if (state.seenMessageIds.has(id)) {
-      return null;
-    }
-
-    markSeenId(id);
-
-    return {
-      id,
-      type,
-      authorName,
-      authorAvatarUrl: resolveAvatarUrl(renderer),
-      text,
-      messageRuns,
-      authorBadges: resolveAuthorBadges(renderer),
-      timestampMs,
-      accentColor: resolveAccentColor(renderer, type),
-      priority: TYPE_INFO[type] ? TYPE_INFO[type].priority : 1
-    };
   }
 
   function markSeenId(id) {
@@ -2146,6 +1898,117 @@
     scheduleFlush();
   }
 
+  function countVisibleRealMessages() {
+    let count = 0;
+    for (const id of state.messageOrder) {
+      if (state.messageNodes.has(id)) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  function createEditDummyMessage(index) {
+    state.editDummySeq += 1;
+    const authorName = "sample";
+    const text = `ダミーコメント ${index}`;
+    return {
+      id: `${EDIT_DUMMY_ID_PREFIX}${state.editDummySeq}`,
+      type: "engagement",
+      authorName,
+      authorAvatarUrl: "",
+      text,
+      messageRuns: [{ type: "text", text }],
+      authorBadges: [],
+      timestampMs: Date.now(),
+      accentColor: "rgb(188, 188, 188)",
+      priority: 0
+    };
+  }
+
+  function createEditDummyRow(index) {
+    const row = createMessageRow(createEditDummyMessage(index));
+    row.dataset.editDummy = "1";
+    const applyVisual = () => {
+      row.style.transition = "none";
+      row.style.opacity = "0.46";
+      row.style.transform = "translateX(0)";
+      row.style.border = "1px dashed rgba(255, 255, 255, 0.28)";
+      row.style.pointerEvents = "none";
+    };
+    applyVisual();
+    window.requestAnimationFrame(applyVisual);
+    return row;
+  }
+
+  function applyEditDummyVisual(row) {
+    if (!row) {
+      return;
+    }
+    row.dataset.editDummy = "1";
+    row.style.transition = "none";
+    row.style.opacity = "0.46";
+    row.style.transform = "translateX(0)";
+    row.style.border = "1px dashed rgba(255, 255, 255, 0.28)";
+    row.style.pointerEvents = "none";
+  }
+
+  function removeEditDummyRows() {
+    const lane = state.overlayUI.lane;
+    if (!lane) {
+      return;
+    }
+    for (const dummy of Array.from(lane.querySelectorAll('[data-edit-dummy="1"]'))) {
+      if (dummy.parentNode === lane) {
+        lane.removeChild(dummy);
+      }
+    }
+  }
+
+  function syncEditDummyRows() {
+    const lane = state.overlayUI.lane;
+    if (!lane) {
+      return;
+    }
+
+    if (!state.isActive || !state.dragState.editModeEnabled) {
+      removeEditDummyRows();
+      return;
+    }
+
+    const profile = getCurrentModeProfile();
+    const maxVisible = Math.max(1, Math.round(profile.maxVisible));
+    const realCount = countVisibleRealMessages();
+    const neededCount = Math.max(0, maxVisible - realCount);
+
+    const existing = Array.from(lane.querySelectorAll('[data-edit-dummy="1"]'));
+    while (existing.length > neededCount) {
+      const node = existing.pop();
+      if (node && node.parentNode === lane) {
+        lane.removeChild(node);
+      }
+    }
+
+    while (existing.length < neededCount) {
+      const nextIndex = realCount + existing.length + 1;
+      const row = createEditDummyRow(nextIndex);
+      lane.appendChild(row);
+      existing.push(row);
+    }
+
+    const renderer = getRendererApi();
+    if (renderer) {
+      renderer.updateRows(existing);
+    }
+
+    for (const row of existing) {
+      applyEditDummyVisual(row);
+      if (row.parentNode === lane) {
+        lane.appendChild(row);
+      }
+    }
+  }
+
   function revealHistoryDuringDrag() {
     if (!state.dragState.active || !state.isActive) {
       return;
@@ -2159,6 +2022,7 @@
     const profile = getCurrentModeProfile();
     const targetIds = state.messageHistoryOrder.slice(-Math.max(1, profile.maxVisible));
     if (targetIds.length === 0) {
+      syncEditDummyRows();
       return;
     }
 
@@ -2193,6 +2057,7 @@
     }
 
     state.messageOrder = nextOrder;
+    syncEditDummyRows();
     syncDragOverlayLayout();
   }
 
@@ -2344,6 +2209,7 @@
     if (state.dragState.active) {
       revealHistoryDuringDrag();
     }
+    syncEditDummyRows();
     syncDragOverlayLayout();
   }
 
@@ -2358,303 +2224,22 @@
     }
   }
 
-  function createAvatarNode(message) {
-    const avatar = document.createElement("div");
-    avatar.className = "yt-chat-overlay-avatar";
-    avatar.style.borderRadius = "999px";
-    avatar.style.overflow = "hidden";
-    avatar.style.border = "2px solid rgba(255, 255, 255, 0.65)";
-    avatar.style.background = "rgba(255, 255, 255, 0.18)";
-    avatar.style.display = "flex";
-    avatar.style.alignItems = "center";
-    avatar.style.justifyContent = "center";
-
-    if (message.authorAvatarUrl) {
-      const image = document.createElement("img");
-      image.src = message.authorAvatarUrl;
-      image.alt = message.authorName || "avatar";
-      image.style.width = "100%";
-      image.style.height = "100%";
-      image.style.objectFit = "cover";
-      avatar.appendChild(image);
-      return avatar;
-    }
-
-    const fallback = document.createElement("span");
-    fallback.textContent = (message.authorName || "?").slice(0, 1).toUpperCase();
-    fallback.style.color = "white";
-    fallback.style.fontWeight = "800";
-    fallback.style.fontSize = "20px";
-    avatar.appendChild(fallback);
-    return avatar;
-  }
-
-  function createBadgeWrap(authorBadges) {
-    if (!Array.isArray(authorBadges) || authorBadges.length === 0) {
-      return null;
-    }
-
-    const wrap = document.createElement("span");
-    wrap.className = "yt-chat-overlay-badges";
-
-    for (const badge of authorBadges) {
-      const item = document.createElement("span");
-      item.className = "yt-chat-overlay-badge-item";
-
-      if (badge.iconUrl) {
-        const icon = document.createElement("img");
-        icon.className = "yt-chat-overlay-badge-icon";
-        icon.src = badge.iconUrl;
-        icon.alt = badge.label || "badge";
-        item.appendChild(icon);
-      } else if (badge.label) {
-        const label = document.createElement("span");
-        label.className = "yt-chat-overlay-badge-label";
-        label.textContent = badge.label.slice(0, 2);
-        item.appendChild(label);
-      }
-
-      if (item.childNodes.length > 0) {
-        wrap.appendChild(item);
-      }
-    }
-
-    if (wrap.childNodes.length === 0) {
-      return null;
-    }
-    return wrap;
-  }
-
-  function appendMessageRuns(target, message) {
-    const runs = Array.isArray(message.messageRuns) ? message.messageRuns : [];
-    if (runs.length === 0) {
-      target.textContent = message.text || "";
+  function updateExistingRowStyles() {
+    const renderer = getRendererApi();
+    if (!renderer) {
       return;
     }
-
-    for (const run of runs) {
-      if (run.type === "emoji" && run.src) {
-        const emoji = document.createElement("img");
-        emoji.className = "yt-chat-overlay-inline-emoji";
-        emoji.src = run.src;
-        emoji.alt = run.alt || "";
-        target.appendChild(emoji);
-        continue;
-      }
-
-      const text = run.text || "";
-      if (text) {
-        target.appendChild(document.createTextNode(text));
-      }
-    }
-  }
-
-  function applyRowStyles(row) {
-    const profile = getCurrentModeProfile();
-    const fontSizePx = profile.fontSizePx;
-    const avatarSizePx = profile.avatarSizePx;
-    const strokePx = profile.strokePx;
-    const avatar = row.querySelector(".yt-chat-overlay-avatar");
-    const textWrap = row.querySelector(".yt-chat-overlay-text-wrap");
-    const authorMeta = row.querySelector(".yt-chat-overlay-author-meta");
-    const author = row.querySelector(".yt-chat-overlay-author");
-    const badges = row.querySelector(".yt-chat-overlay-badges");
-    const body = row.querySelector(".yt-chat-overlay-body");
-
-    row.style.display = "flex";
-    row.style.alignItems = "center";
-    row.style.maxWidth = "100%";
-    row.style.gap = profile.showAvatar
-      ? `${Math.max(6, Math.round(avatarSizePx * 0.2))}px`
-      : "0px";
-    row.style.padding = `${Math.max(2, Math.round(fontSizePx * 0.12))}px ${Math.max(
-      8,
-      Math.round(fontSizePx * 0.45)
-    )}px`;
-    row.style.background = `rgba(0, 0, 0, ${profile.messageBgOpacity})`;
-    row.style.borderRadius = `${Math.max(8, Math.round(fontSizePx * 0.55))}px`;
-    row.style.backdropFilter = "blur(1px)";
-
-    if (avatar) {
-      if (profile.showAvatar) {
-        avatar.style.display = "flex";
-        avatar.style.width = `${avatarSizePx}px`;
-        avatar.style.height = `${avatarSizePx}px`;
-        avatar.style.minWidth = `${avatarSizePx}px`;
-      } else {
-        avatar.style.display = "none";
-      }
-    }
-
-    if (textWrap) {
-      textWrap.style.display = "flex";
-      textWrap.style.alignItems = "center";
-      textWrap.style.flexWrap = "nowrap";
-      textWrap.style.gap = `${Math.max(6, Math.round(fontSizePx * 0.3))}px`;
-      textWrap.style.minWidth = "0";
-      textWrap.style.maxWidth = "100%";
-      textWrap.style.flex = "1 1 auto";
-      textWrap.style.overflow = "visible";
-    }
-
-    const outlineShadow = createOutlineShadow(strokePx);
-    if (authorMeta) {
-      const hasBadge = Boolean(badges && badges.childElementCount > 0);
-      authorMeta.style.display =
-        profile.showAuthorName || hasBadge ? "inline-flex" : "none";
-      authorMeta.style.alignItems = "center";
-      authorMeta.style.gap = `${Math.max(4, Math.round(fontSizePx * 0.16))}px`;
-      authorMeta.style.marginRight = "0";
-      authorMeta.style.verticalAlign = "middle";
-      authorMeta.style.flex = "0 0 auto";
-    }
-
-    if (author) {
-      author.style.color = row.dataset.accentColor || TYPE_INFO.text.fallbackColor;
-      author.style.display = profile.showAuthorName ? "inline" : "none";
-      author.style.opacity = String(profile.textOpacity);
-      author.style.fontWeight = String(profile.fontWeight);
-      author.style.fontSize = `${fontSizePx}px`;
-      author.style.lineHeight = "1.1";
-      author.style.webkitTextStroke = "0px transparent";
-      author.style.textShadow = outlineShadow;
-      author.style.whiteSpace = "nowrap";
-      author.style.writingMode = "horizontal-tb";
-      author.style.textOrientation = "mixed";
-    }
-
-    if (badges) {
-      badges.style.display = "inline-flex";
-      badges.style.alignItems = "center";
-      badges.style.gap = `${Math.max(2, Math.round(fontSizePx * 0.1))}px`;
-      badges.style.verticalAlign = "middle";
-      badges.style.opacity = String(profile.textOpacity);
-    }
-
-    for (const badgeIcon of row.querySelectorAll(".yt-chat-overlay-badge-icon")) {
-      const badgeSize = Math.max(14, Math.round(fontSizePx * 0.9));
-      badgeIcon.style.width = `${badgeSize}px`;
-      badgeIcon.style.height = `${badgeSize}px`;
-      badgeIcon.style.objectFit = "contain";
-      badgeIcon.style.verticalAlign = "middle";
-    }
-
-    for (const badgeLabel of row.querySelectorAll(".yt-chat-overlay-badge-label")) {
-      badgeLabel.style.display = "inline-flex";
-      badgeLabel.style.alignItems = "center";
-      badgeLabel.style.justifyContent = "center";
-      badgeLabel.style.minWidth = `${Math.max(14, Math.round(fontSizePx * 0.85))}px`;
-      badgeLabel.style.height = `${Math.max(14, Math.round(fontSizePx * 0.85))}px`;
-      badgeLabel.style.padding = "0 4px";
-      badgeLabel.style.borderRadius = "999px";
-      badgeLabel.style.background = "rgba(255, 255, 255, 0.22)";
-      badgeLabel.style.color = "#ffffff";
-      badgeLabel.style.fontSize = `${Math.max(10, Math.round(fontSizePx * 0.45))}px`;
-      badgeLabel.style.fontWeight = "700";
-      badgeLabel.style.lineHeight = "1";
-    }
-
-    if (body) {
-      body.style.color = "#ffffff";
-      body.style.opacity = String(profile.textOpacity);
-      body.style.fontWeight = String(profile.fontWeight);
-      body.style.fontSize = `${fontSizePx}px`;
-      body.style.lineHeight = "1.1";
-      body.style.webkitTextStroke = "0px transparent";
-      body.style.textShadow = outlineShadow;
-      body.style.minWidth = "0";
-      body.style.whiteSpace = "pre-wrap";
-      body.style.overflowWrap = "anywhere";
-      body.style.wordBreak = "break-word";
-      body.style.display = "block";
-      body.style.verticalAlign = "middle";
-      body.style.flex = "1 1 auto";
-      body.style.alignSelf = "center";
-      body.style.writingMode = "horizontal-tb";
-      body.style.textOrientation = "mixed";
-    }
-
-    for (const emoji of row.querySelectorAll(".yt-chat-overlay-inline-emoji")) {
-      const emojiSize = Math.max(16, Math.round(fontSizePx * 1.08));
-      emoji.style.width = `${emojiSize}px`;
-      emoji.style.height = `${emojiSize}px`;
-      emoji.style.minWidth = `${emojiSize}px`;
-      emoji.style.objectFit = "contain";
-      emoji.style.verticalAlign = "text-bottom";
-      emoji.style.margin = "0 0.08em";
-      emoji.style.display = "inline-block";
-    }
-  }
-
-  function createOutlineShadow(strokePx) {
-    const distance = Math.max(0, Number(strokePx) || 0);
-    const shadows = [];
-
-    if (distance > 0) {
-      shadows.push(`${distance}px 0 0 rgba(0, 0, 0, 0.95)`);
-      shadows.push(`-${distance}px 0 0 rgba(0, 0, 0, 0.95)`);
-      shadows.push(`0 ${distance}px 0 rgba(0, 0, 0, 0.95)`);
-      shadows.push(`0 -${distance}px 0 rgba(0, 0, 0, 0.95)`);
-      shadows.push(`${distance}px ${distance}px 0 rgba(0, 0, 0, 0.95)`);
-      shadows.push(`${distance}px -${distance}px 0 rgba(0, 0, 0, 0.95)`);
-      shadows.push(`-${distance}px ${distance}px 0 rgba(0, 0, 0, 0.95)`);
-      shadows.push(`-${distance}px -${distance}px 0 rgba(0, 0, 0, 0.95)`);
-    }
-
-    shadows.push("0 2px 6px rgba(0, 0, 0, 0.85)");
-    return shadows.join(", ");
-  }
-
-  function updateExistingRowStyles() {
-    for (const row of state.messageNodes.values()) {
-      applyRowStyles(row);
-    }
+    renderer.updateRows(state.messageNodes.values());
+    syncEditDummyRows();
     syncDragOverlayLayout();
   }
 
   function createMessageRow(message) {
-    const row = document.createElement("div");
-    row.dataset.messageId = message.id;
-    row.dataset.accentColor = message.accentColor || "";
-    row.style.opacity = "0";
-    row.style.transform = "translateX(-8px)";
-    row.style.transition = "opacity 220ms ease, transform 220ms ease";
-
-    const avatar = createAvatarNode(message);
-    row.appendChild(avatar);
-
-    const textWrap = document.createElement("div");
-    textWrap.className = "yt-chat-overlay-text-wrap";
-
-    const authorMeta = document.createElement("span");
-    authorMeta.className = "yt-chat-overlay-author-meta";
-
-    const author = document.createElement("span");
-    author.className = "yt-chat-overlay-author";
-    author.textContent = `@${message.authorName || "system"}`;
-    authorMeta.appendChild(author);
-
-    const badges = createBadgeWrap(message.authorBadges);
-    if (badges) {
-      authorMeta.appendChild(badges);
+    const renderer = getRendererApi();
+    if (!renderer) {
+      return document.createElement("div");
     }
-
-    const body = document.createElement("span");
-    body.className = "yt-chat-overlay-body";
-    appendMessageRuns(body, message);
-
-    textWrap.appendChild(authorMeta);
-    textWrap.appendChild(body);
-    row.appendChild(textWrap);
-
-    applyRowStyles(row);
-
-    window.requestAnimationFrame(() => {
-      row.style.opacity = "1";
-      row.style.transform = "translateX(0)";
-    });
-
-    return row;
+    return renderer.createMessageRow(message);
   }
 
   function clearMessageTimer(messageId) {

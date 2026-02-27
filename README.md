@@ -51,6 +51,12 @@ YouTube の既存チャット UI をそのまま表示せず、チャット ifra
 - ライブ配信
 - ライブチャットリプレイ付きアーカイブ
 
+## ファイル構成
+
+- `content.js`: オーバーレイ制御（状態管理、モード判定、チャット取得、ライフサイクル）
+- `content-parser.js`: チャットrenderer解析（本文/絵文字/バッジの正規化）
+- `content-renderer.js`: オーバーレイ行DOM生成とスタイル適用
+
 ## 使い方
 
 1. Chrome で `chrome://extensions/` を開く
