@@ -53,6 +53,10 @@
         case "yt-live-chat-paid-message-renderer":
           return "paid";
         case "yt-live-chat-membership-item-renderer":
+        case "yt-live-chat-sponsorships-gift-purchase-announcement-renderer":
+        case "yt-live-chat-sponsorships-gift-redemption-announcement-renderer":
+        case "yt-live-chat-membership-gift-purchase-announcement-renderer":
+        case "yt-live-chat-membership-gift-redemption-announcement-renderer":
           return "membership";
         case "yt-live-chat-paid-sticker-renderer":
           return "sticker";
@@ -217,6 +221,10 @@
         .replace(/^@+/, "")
         .trim();
       return normalized || "system";
+    }
+
+    function isSystemAuthorName(name) {
+      return /^system$/i.test(String(name || "").trim());
     }
 
     function resolveAuthorName(renderer) {
@@ -443,13 +451,27 @@
       }
 
       if (type === "membership") {
-        const header = pickFirstText(renderer, ["#header-subtext", "#header-primary-text"]);
+        const header = pickFirstText(renderer, [
+          "#header-subtext",
+          "#header-primary-text",
+          "#primary-text",
+          ".primary-text"
+        ]);
         const headerRun = makeTextRun(header ? `${header} ` : "");
         if (headerRun) {
           runs.push(headerRun);
         }
 
-        runs.push(...buildRunsFromSelectors(renderer, ["#message", ".message"]));
+        runs.push(
+          ...buildRunsFromSelectors(renderer, [
+            "#message",
+            ".message",
+            "#primary-text",
+            ".primary-text",
+            "#text",
+            ".text"
+          ])
+        );
         return compactRuns(runs);
       }
 
@@ -521,9 +543,18 @@
         case "membership": {
           const header = pickFirstText(renderer, [
             "#header-subtext",
-            "#header-primary-text"
+            "#header-primary-text",
+            "#primary-text",
+            ".primary-text"
           ]);
-          const body = pickFirstText(renderer, ["#message", ".message"]);
+          const body = pickFirstText(renderer, [
+            "#message",
+            ".message",
+            "#primary-text",
+            ".primary-text",
+            "#text",
+            ".text"
+          ]);
           return [header, body].filter(Boolean).join(" ");
         }
         case "sticker": {
@@ -573,6 +604,9 @@
       }
 
       const authorName = resolveAuthorName(renderer);
+      if (type === "text" && isSystemAuthorName(authorName)) {
+        return null;
+      }
       const timestampMs = Date.now();
       const messageRuns = resolveMessageRuns(renderer, type);
       const runsText = runsToPlainText(messageRuns);

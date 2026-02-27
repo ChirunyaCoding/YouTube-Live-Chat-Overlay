@@ -158,6 +158,10 @@
     "yt-live-chat-text-message-renderer",
     "yt-live-chat-paid-message-renderer",
     "yt-live-chat-membership-item-renderer",
+    "yt-live-chat-sponsorships-gift-purchase-announcement-renderer",
+    "yt-live-chat-sponsorships-gift-redemption-announcement-renderer",
+    "yt-live-chat-membership-gift-purchase-announcement-renderer",
+    "yt-live-chat-membership-gift-redemption-announcement-renderer",
     "yt-live-chat-paid-sticker-renderer",
     "yt-live-chat-viewer-engagement-message-renderer",
     "yt-live-chat-mode-change-message-renderer"
@@ -444,6 +448,25 @@
           panelInput[mode],
           modeProfiles[mode]
         );
+      }
+    }
+
+    const sharedTextOpacity = clampNumber(
+      input.textOpacity,
+      0.1,
+      1,
+      panelModeProfiles.closed.fullscreen.textOpacity
+    );
+    const sharedMessageBgOpacity = clampNumber(
+      input.messageBgOpacity,
+      0,
+      0.9,
+      panelModeProfiles.closed.fullscreen.messageBgOpacity
+    );
+    for (const panelState of PANEL_STATE_KEYS) {
+      for (const mode of MODE_KEYS) {
+        panelModeProfiles[panelState][mode].textOpacity = sharedTextOpacity;
+        panelModeProfiles[panelState][mode].messageBgOpacity = sharedMessageBgOpacity;
       }
     }
 
@@ -1000,10 +1023,27 @@
       endOffsetDrag();
     }
 
+    if (next) {
+      state.renderQueue.length = 0;
+      state.removeQueue.length = 0;
+      state.expiredMessageIds = [];
+      state.expiredMessageIdSet.clear();
+      if (state.expireDrainTimer) {
+        window.clearTimeout(state.expireDrainTimer);
+        state.expireDrainTimer = 0;
+      }
+      for (const messageId of state.messageOrder) {
+        clearMessageTimer(messageId);
+      }
+      for (const messageId of [...state.messageOrder]) {
+        removeMessageNode(messageId, true);
+      }
+    }
+
     state.dragState.editModeEnabled = next;
     syncEditModeUiState();
-    if (next) {
-      revealHistoryDuringDrag();
+    if (!next) {
+      restoreVisibleMessagesFromHistory();
     }
     applyOverlayLayoutStyles();
     syncEditDummyRows();
@@ -1861,6 +1901,9 @@
       return;
     }
     rememberMessageHistory(message);
+    if (state.dragState.editModeEnabled) {
+      return;
+    }
     if (state.messageNodes.has(message.id)) {
       return;
     }
@@ -2009,8 +2052,55 @@
     }
   }
 
+  function restoreVisibleMessagesFromHistory() {
+    if (!state.isActive) {
+      return;
+    }
+
+    const lane = state.overlayUI.lane;
+    if (!lane) {
+      return;
+    }
+
+    const profile = getCurrentModeProfile();
+    const targetIds = state.messageHistoryOrder.slice(-Math.max(1, profile.maxVisible));
+
+    for (const messageId of [...state.messageOrder]) {
+      removeMessageNode(messageId, true);
+    }
+
+    const nextOrder = [];
+    for (const messageId of targetIds) {
+      const message = state.messageHistoryMap.get(messageId);
+      if (!message) {
+        continue;
+      }
+
+      let node = state.messageNodes.get(messageId);
+      if (!node) {
+        node = createMessageRow(message);
+        node.style.transition = "none";
+        node.style.opacity = "1";
+        node.style.transform = "translateX(0)";
+        state.messageNodes.set(messageId, node);
+      }
+
+      lane.appendChild(node);
+      nextOrder.push(messageId);
+      clearMessageTimer(messageId);
+      const timer = window.setTimeout(() => {
+        enqueueExpiredMessage(messageId);
+      }, getCurrentModeProfile().ttlMs);
+      state.activeTimers.set(messageId, timer);
+    }
+
+    state.messageOrder = nextOrder;
+    syncEditDummyRows();
+    syncDragOverlayLayout();
+  }
+
   function revealHistoryDuringDrag() {
-    if (!state.dragState.active || !state.isActive) {
+    if (!state.dragState.active || !state.isActive || state.dragState.editModeEnabled) {
       return;
     }
 

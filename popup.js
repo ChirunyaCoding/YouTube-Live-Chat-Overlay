@@ -115,6 +115,7 @@
   const PROFILE_CHECKBOX_IDS = ["showAvatar", "showAuthorName"];
   const PROFILE_NUMERIC_IDS = Object.keys(NUMERIC_FIELDS);
   const PROFILE_SELECT_IDS = Object.keys(PROFILE_SELECT_FIELDS);
+  const SHARED_OPACITY_IDS = ["textOpacity", "messageBgOpacity"];
 
   const form = document.getElementById("settings-form");
   const resetButton = document.getElementById("resetButton");
@@ -343,6 +344,27 @@
       }
     }
 
+    const sharedTextOpacity = clampNumber(
+      input.textOpacity,
+      NUMERIC_FIELDS.textOpacity.min,
+      NUMERIC_FIELDS.textOpacity.max,
+      panelModeProfiles.closed.fullscreen.textOpacity,
+      NUMERIC_FIELDS.textOpacity.step
+    );
+    const sharedMessageBgOpacity = clampNumber(
+      input.messageBgOpacity,
+      NUMERIC_FIELDS.messageBgOpacity.min,
+      NUMERIC_FIELDS.messageBgOpacity.max,
+      panelModeProfiles.closed.fullscreen.messageBgOpacity,
+      NUMERIC_FIELDS.messageBgOpacity.step
+    );
+    for (const panelState of PANEL_STATE_KEYS) {
+      for (const mode of MODE_KEYS) {
+        panelModeProfiles[panelState][mode].textOpacity = sharedTextOpacity;
+        panelModeProfiles[panelState][mode].messageBgOpacity = sharedMessageBgOpacity;
+      }
+    }
+
     return {
       enabledModes: {
         fullscreen:
@@ -511,6 +533,14 @@
     profile[id] = value;
   }
 
+  function updateSharedOpacityField(id, value) {
+    for (const panelState of PANEL_STATE_KEYS) {
+      for (const mode of MODE_KEYS) {
+        currentSettings.panelModeProfiles[panelState][mode][id] = value;
+      }
+    }
+  }
+
   function handleControlChange(event) {
     const target = event.target;
     if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLSelectElement)) {
@@ -582,7 +612,11 @@
         meta.step
       );
       target.value = String(clamped);
-      updateCurrentProfileField(id, clamped);
+      if (SHARED_OPACITY_IDS.includes(id)) {
+        updateSharedOpacityField(id, clamped);
+      } else {
+        updateCurrentProfileField(id, clamped);
+      }
       queueSave();
     }
   }
