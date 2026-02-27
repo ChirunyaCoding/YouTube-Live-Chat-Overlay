@@ -42,7 +42,17 @@
               <option value="normal">通常表示</option>
             </select>
           </label>
-          <p class="hint mini">以下の項目は選択中モードにだけ保存されます。</p>
+
+          <label class="field">
+            <span>チャットパネル状態</span>
+            <select id="profilePanelState">
+              <option value="closed">閉じている時</option>
+              <option value="open">開いている時</option>
+            </select>
+          </label>
+          <p class="hint mini">
+            以下の項目は「選択中モード × チャットパネル状態」にだけ保存されます。
+          </p>
 
           <label class="field checkbox">
             <input id="showAvatar" type="checkbox" />

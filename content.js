@@ -57,6 +57,7 @@
    * @typedef {Object} OverlayConfig
    * @property {{fullscreen: boolean, theater: boolean, normal: boolean}} enabledModes
    * @property {{fullscreen: OverlayModeProfile, theater: OverlayModeProfile, normal: OverlayModeProfile}} modeProfiles
+   * @property {{open: {fullscreen: OverlayModeProfile, theater: OverlayModeProfile, normal: OverlayModeProfile}, closed: {fullscreen: OverlayModeProfile, theater: OverlayModeProfile, normal: OverlayModeProfile}}} panelModeProfiles
    * @property {number} maxVisible
    * @property {number} ttlMs
    * @property {number} fadeMs
@@ -79,6 +80,7 @@
 
   const STORAGE_KEY = "overlaySettings";
   const MODE_KEYS = ["fullscreen", "theater", "normal"];
+  const PANEL_STATE_KEYS = ["open", "closed"];
   const OFFSET_MAX_X_BASE = 1920;
   const OFFSET_MAX_Y_BASE = 1080;
 
@@ -112,6 +114,13 @@
     };
   }
 
+  function createPanelModeProfiles(modeProfile) {
+    return {
+      open: createModeProfiles(modeProfile),
+      closed: createModeProfiles(modeProfile)
+    };
+  }
+
   /** @type {OverlayConfig} */
   const DEFAULT_CONFIG = {
     enabledModes: {
@@ -120,6 +129,7 @@
       normal: true
     },
     modeProfiles: createModeProfiles(DEFAULT_MODE_PROFILE),
+    panelModeProfiles: createPanelModeProfiles(DEFAULT_MODE_PROFILE),
     maxVisible: DEFAULT_MODE_PROFILE.maxVisible,
     ttlMs: DEFAULT_MODE_PROFILE.ttlMs,
     fadeMs: DEFAULT_MODE_PROFILE.fadeMs,
@@ -224,6 +234,7 @@
       active: false,
       pointerId: null,
       mode: "fullscreen",
+      panelState: "closed",
       startClientX: 0,
       startClientY: 0,
       startOffsetXPx: 0,
@@ -344,6 +355,10 @@
       input.modeProfiles && typeof input.modeProfiles === "object"
         ? input.modeProfiles
         : {};
+    const panelModeProfilesInput =
+      input.panelModeProfiles && typeof input.panelModeProfiles === "object"
+        ? input.panelModeProfiles
+        : {};
     const modeSizeScaleInput =
       input.modeSizeScale && typeof input.modeSizeScale === "object"
         ? input.modeSizeScale
@@ -364,6 +379,22 @@
       modeProfiles[mode] = normalizeModeProfile(modeProfilesInput[mode], fallbackProfile);
     }
 
+    const panelModeProfiles = createPanelModeProfiles(DEFAULT_MODE_PROFILE);
+    for (const panelState of PANEL_STATE_KEYS) {
+      const panelInput =
+        panelModeProfilesInput[panelState] &&
+        typeof panelModeProfilesInput[panelState] === "object"
+          ? panelModeProfilesInput[panelState]
+          : {};
+
+      for (const mode of MODE_KEYS) {
+        panelModeProfiles[panelState][mode] = normalizeModeProfile(
+          panelInput[mode],
+          modeProfiles[mode]
+        );
+      }
+    }
+
     return {
       enabledModes: {
         fullscreen:
@@ -379,26 +410,27 @@
             ? modeInput.normal
             : DEFAULT_CONFIG.enabledModes.normal
       },
-      modeProfiles,
+      modeProfiles: panelModeProfiles.closed,
+      panelModeProfiles,
       // Kept for backward compatibility with older code paths.
-      maxVisible: modeProfiles.fullscreen.maxVisible,
-      ttlMs: modeProfiles.fullscreen.ttlMs,
-      fadeMs: modeProfiles.fullscreen.fadeMs,
-      sequentialFadeSec: modeProfiles.fullscreen.sequentialFadeSec,
-      laneWidthPercent: modeProfiles.fullscreen.laneWidthPercent,
-      fontSizePx: modeProfiles.fullscreen.fontSizePx,
-      fontWeight: modeProfiles.fullscreen.fontWeight,
-      avatarSizePx: modeProfiles.fullscreen.avatarSizePx,
-      rowGapPx: modeProfiles.fullscreen.rowGapPx,
-      horizontalAlign: modeProfiles.fullscreen.horizontalAlign,
-      verticalAlign: modeProfiles.fullscreen.verticalAlign,
-      offsetXPx: modeProfiles.fullscreen.offsetXPx,
-      offsetYPx: modeProfiles.fullscreen.offsetYPx,
-      strokePx: modeProfiles.fullscreen.strokePx,
-      textOpacity: modeProfiles.fullscreen.textOpacity,
-      messageBgOpacity: modeProfiles.fullscreen.messageBgOpacity,
-      showAvatar: modeProfiles.fullscreen.showAvatar,
-      showAuthorName: modeProfiles.fullscreen.showAuthorName
+      maxVisible: panelModeProfiles.closed.fullscreen.maxVisible,
+      ttlMs: panelModeProfiles.closed.fullscreen.ttlMs,
+      fadeMs: panelModeProfiles.closed.fullscreen.fadeMs,
+      sequentialFadeSec: panelModeProfiles.closed.fullscreen.sequentialFadeSec,
+      laneWidthPercent: panelModeProfiles.closed.fullscreen.laneWidthPercent,
+      fontSizePx: panelModeProfiles.closed.fullscreen.fontSizePx,
+      fontWeight: panelModeProfiles.closed.fullscreen.fontWeight,
+      avatarSizePx: panelModeProfiles.closed.fullscreen.avatarSizePx,
+      rowGapPx: panelModeProfiles.closed.fullscreen.rowGapPx,
+      horizontalAlign: panelModeProfiles.closed.fullscreen.horizontalAlign,
+      verticalAlign: panelModeProfiles.closed.fullscreen.verticalAlign,
+      offsetXPx: panelModeProfiles.closed.fullscreen.offsetXPx,
+      offsetYPx: panelModeProfiles.closed.fullscreen.offsetYPx,
+      strokePx: panelModeProfiles.closed.fullscreen.strokePx,
+      textOpacity: panelModeProfiles.closed.fullscreen.textOpacity,
+      messageBgOpacity: panelModeProfiles.closed.fullscreen.messageBgOpacity,
+      showAvatar: panelModeProfiles.closed.fullscreen.showAvatar,
+      showAuthorName: panelModeProfiles.closed.fullscreen.showAuthorName
     };
   }
 
@@ -546,14 +578,32 @@
     return "normal";
   }
 
+  function getCurrentChatPanelState() {
+    const nativeIframe = findChatIframe();
+    const nativeItemsNode = getChatItemsNode(nativeIframe);
+    return nativeItemsNode ? "open" : "closed";
+  }
+
+  function getModeProfile(mode, panelState) {
+    const stateConfig = state.config && state.config.panelModeProfiles;
+    const normalizedPanelState = panelState === "open" ? "open" : "closed";
+    const normalizedMode = MODE_KEYS.includes(mode) ? mode : "fullscreen";
+    if (
+      stateConfig &&
+      stateConfig[normalizedPanelState] &&
+      stateConfig[normalizedPanelState][normalizedMode]
+    ) {
+      return stateConfig[normalizedPanelState][normalizedMode];
+    }
+
+    const fallbackConfig = DEFAULT_CONFIG.panelModeProfiles;
+    return fallbackConfig[normalizedPanelState][normalizedMode];
+  }
+
   function getCurrentModeProfile() {
     const mode = getCurrentDisplayMode();
-    const modeProfiles =
-      state.config && state.config.modeProfiles ? state.config.modeProfiles : null;
-    if (modeProfiles && modeProfiles[mode]) {
-      return modeProfiles[mode];
-    }
-    return DEFAULT_CONFIG.modeProfiles[mode];
+    const panelState = getCurrentChatPanelState();
+    return getModeProfile(mode, panelState);
   }
 
   function resolveFullscreenHost(fullscreenElement) {
@@ -825,8 +875,8 @@
     }
 
     const mode = getCurrentDisplayMode();
-    const profiles = state.config.modeProfiles;
-    const profile = profiles ? profiles[mode] : null;
+    const panelState = getCurrentChatPanelState();
+    const profile = getModeProfile(mode, panelState);
     if (!profile) {
       return;
     }
@@ -834,6 +884,7 @@
     state.dragState.active = true;
     state.dragState.pointerId = event.pointerId;
     state.dragState.mode = mode;
+    state.dragState.panelState = panelState;
     state.dragState.startClientX = event.clientX;
     state.dragState.startClientY = event.clientY;
     state.dragState.startOffsetXPx = profile.offsetXPx;
@@ -871,8 +922,7 @@
     }
 
     const host = state.overlayUI.host;
-    const profiles = state.config.modeProfiles;
-    const profile = profiles ? profiles[drag.mode] : null;
+    const profile = getModeProfile(drag.mode, drag.panelState);
     if (!host || !profile) {
       return;
     }

@@ -1,7 +1,9 @@
 (() => {
   const STORAGE_KEY = "overlaySettings";
   const POPUP_MODE_KEY = "overlayPopupMode";
+  const POPUP_PANEL_STATE_KEY = "overlayPopupPanelState";
   const MODE_KEYS = ["fullscreen", "theater", "normal"];
+  const PANEL_STATE_KEYS = ["closed", "open"];
   const OFFSET_MAX_X_BASE = 1920;
   const OFFSET_MAX_Y_BASE = 1080;
 
@@ -34,13 +36,21 @@
     };
   }
 
+  function createPanelModeProfiles(profile) {
+    return {
+      open: createModeProfiles(profile),
+      closed: createModeProfiles(profile)
+    };
+  }
+
   const DEFAULT_SETTINGS = {
     enabledModes: {
       fullscreen: true,
       theater: true,
       normal: true
     },
-    modeProfiles: createModeProfiles(DEFAULT_MODE_PROFILE)
+    modeProfiles: createModeProfiles(DEFAULT_MODE_PROFILE),
+    panelModeProfiles: createPanelModeProfiles(DEFAULT_MODE_PROFILE)
   };
 
   const NUMERIC_FIELDS = {
@@ -110,11 +120,13 @@
   const resetButton = document.getElementById("resetButton");
   const statusNode = document.getElementById("status");
   const profileModeNode = document.getElementById("profileMode");
+  const profilePanelStateNode = document.getElementById("profilePanelState");
 
   let saveInFlight = false;
   let saveRequested = false;
   let statusTimer = 0;
   let selectedMode = "fullscreen";
+  let selectedPanelState = "closed";
   let currentSettings = normalizeSettings(DEFAULT_SETTINGS);
 
   function clampNumber(value, min, max, fallback, step) {
@@ -294,6 +306,10 @@
       input.modeProfiles && typeof input.modeProfiles === "object"
         ? input.modeProfiles
         : {};
+    const panelModeProfilesInput =
+      input.panelModeProfiles && typeof input.panelModeProfiles === "object"
+        ? input.panelModeProfiles
+        : {};
     const modeSizeScaleInput =
       input.modeSizeScale && typeof input.modeSizeScale === "object"
         ? input.modeSizeScale
@@ -312,6 +328,21 @@
       modeProfiles[mode] = normalizeModeProfile(modeProfilesInput[mode], fallbackProfile);
     }
 
+    const panelModeProfiles = createPanelModeProfiles(DEFAULT_MODE_PROFILE);
+    for (const panelState of PANEL_STATE_KEYS) {
+      const panelInput =
+        panelModeProfilesInput[panelState] &&
+        typeof panelModeProfilesInput[panelState] === "object"
+          ? panelModeProfilesInput[panelState]
+          : {};
+      for (const mode of MODE_KEYS) {
+        panelModeProfiles[panelState][mode] = normalizeModeProfile(
+          panelInput[mode],
+          modeProfiles[mode]
+        );
+      }
+    }
+
     return {
       enabledModes: {
         fullscreen:
@@ -327,7 +358,8 @@
             ? modeInput.normal
             : DEFAULT_SETTINGS.enabledModes.normal
       },
-      modeProfiles
+      modeProfiles: panelModeProfiles.closed,
+      panelModeProfiles
     };
   }
 
@@ -355,8 +387,11 @@
     });
   }
 
-  function persistSelectedMode() {
-    storageSet({ [POPUP_MODE_KEY]: selectedMode }).catch((error) => {
+  function persistPopupSelection() {
+    storageSet({
+      [POPUP_MODE_KEY]: selectedMode,
+      [POPUP_PANEL_STATE_KEY]: selectedPanelState
+    }).catch((error) => {
       console.error(error);
     });
   }
@@ -381,7 +416,12 @@
   }
 
   function getCurrentProfile() {
-    return currentSettings.modeProfiles[selectedMode] || DEFAULT_MODE_PROFILE;
+    const panelProfiles =
+      currentSettings.panelModeProfiles && currentSettings.panelModeProfiles[selectedPanelState];
+    if (panelProfiles && panelProfiles[selectedMode]) {
+      return panelProfiles[selectedMode];
+    }
+    return DEFAULT_MODE_PROFILE;
   }
 
   function setProfileFields(profile) {
@@ -426,6 +466,9 @@
 
     if (profileModeNode) {
       profileModeNode.value = selectedMode;
+    }
+    if (profilePanelStateNode) {
+      profilePanelStateNode.value = selectedPanelState;
     }
 
     setProfileFields(getCurrentProfile());
@@ -484,7 +527,17 @@
       if (MODE_KEYS.includes(nextMode)) {
         selectedMode = nextMode;
         setProfileFields(getCurrentProfile());
-        persistSelectedMode();
+        persistPopupSelection();
+      }
+      return;
+    }
+
+    if (id === "profilePanelState") {
+      const nextPanelState = String(target.value || "");
+      if (PANEL_STATE_KEYS.includes(nextPanelState)) {
+        selectedPanelState = nextPanelState;
+        setProfileFields(getCurrentProfile());
+        persistPopupSelection();
       }
       return;
     }
@@ -536,14 +589,23 @@
 
   async function loadInitialSettings() {
     try {
-      const result = await storageGet([STORAGE_KEY, POPUP_MODE_KEY]);
+      const result = await storageGet([
+        STORAGE_KEY,
+        POPUP_MODE_KEY,
+        POPUP_PANEL_STATE_KEY
+      ]);
       currentSettings = normalizeSettings(result[STORAGE_KEY]);
       const savedMode = String(result[POPUP_MODE_KEY] || "");
       selectedMode = MODE_KEYS.includes(savedMode) ? savedMode : "fullscreen";
+      const savedPanelState = String(result[POPUP_PANEL_STATE_KEY] || "");
+      selectedPanelState = PANEL_STATE_KEYS.includes(savedPanelState)
+        ? savedPanelState
+        : "closed";
       renderFormFromState();
     } catch (error) {
       currentSettings = normalizeSettings(DEFAULT_SETTINGS);
       selectedMode = "fullscreen";
+      selectedPanelState = "closed";
       renderFormFromState();
       setStatus("設定読み込みに失敗しました", true);
       console.error(error);
@@ -560,9 +622,10 @@
       resetButton.addEventListener("click", async () => {
         currentSettings = normalizeSettings(DEFAULT_SETTINGS);
         selectedMode = "fullscreen";
+        selectedPanelState = "closed";
         renderFormFromState();
         await saveCurrentSettings();
-        persistSelectedMode();
+        persistPopupSelection();
       });
     }
   }
