@@ -53,7 +53,12 @@ YouTube の既存チャット UI をそのまま表示せず、チャット ifra
 
 ## ファイル構成
 
-- `content.js`: オーバーレイ制御（状態管理、モード判定、チャット取得、ライフサイクル）
+- `content-config.js`: 定数/デフォルト値/設定正規化
+- `content-dom.js`: モード判定とDOM探索ユーティリティ
+- `content-chat-source.js`: チャット取得元（iframe監視/隠しiframe）管理
+- `content-message-flow.js`: メッセージキュー/表示寿命/ダミー行管理
+- `content-overlay-ui.js`: オーバーレイUIとドラッグ編集/配置制御
+- `content.js`: オーバーレイUI制御とライフサイクル統合
 - `content-parser.js`: チャットrenderer解析（本文/絵文字/バッジの正規化）
 - `content-renderer.js`: オーバーレイ行DOM生成とスタイル適用
 

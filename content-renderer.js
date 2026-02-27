@@ -151,9 +151,12 @@
         8,
         Math.round(fontSizePx * 0.45)
       )}px`;
-      row.style.background = `rgba(0, 0, 0, ${profile.messageBgOpacity})`;
+      const backgroundOpacity = Math.max(0, Number(profile.messageBgOpacity) || 0);
+      row.style.background = `rgba(0, 0, 0, ${backgroundOpacity})`;
       row.style.borderRadius = `${Math.max(8, Math.round(fontSizePx * 0.55))}px`;
-      row.style.backdropFilter = "blur(1px)";
+      const backdropValue = backgroundOpacity > 0 ? "blur(1px)" : "none";
+      row.style.backdropFilter = backdropValue;
+      row.style.webkitBackdropFilter = backdropValue;
 
       if (avatar) {
         if (profile.showAvatar) {
