@@ -4,244 +4,466 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Overlay Settings</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <div class="app-container">
-      <header class="app-header">
-        <h1>YouTube Chat Overlay</h1>
-        <p class="subtitle">設定は自動保存され、即座に反映されます</p>
-      </header>
-
-      <nav class="tabs">
-        <button type="button" class="tab-btn active" data-tab="general">一般</button>
-        <button type="button" class="tab-btn" data-tab="appearance">外観</button>
-        <button type="button" class="tab-btn" data-tab="layout">配置・動作</button>
+      <!-- Sidebar Navigation -->
+      <nav class="sidebar">
+        <div class="sidebar-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
+        
+        <button type="button" class="nav-btn active" data-tab="general">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span class="nav-tooltip">一般</span>
+        </button>
+        
+        <button type="button" class="nav-btn" data-tab="appearance">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="13.5" cy="6.5" r="2.5"/>
+            <path d="M13.5 9c-2.5 0-3.5 1.5-3.5 3.5V13h7v-.5c0-2-1-3.5-3.5-3.5z"/>
+            <path d="M20 21V10a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11"/>
+            <path d="M2 21h20"/>
+          </svg>
+          <span class="nav-tooltip">外観</span>
+        </button>
+        
+        <button type="button" class="nav-btn" data-tab="layout">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect width="18" height="18" x="3" y="3" rx="2"/>
+            <path d="M3 9h18"/>
+            <path d="M9 21V9"/>
+          </svg>
+          <span class="nav-tooltip">配置・動作</span>
+        </button>
       </nav>
 
-      <main class="panel">
-        <form id="settings-form">
-          
-          <div id="general" class="tab-pane active">
-            <section class="settings-group">
-              <h2 class="group-title">有効化する表示モード</h2>
-              
-              <label class="toggle-row">
-                <span class="label-text">全画面モード</span>
-                <div class="toggle-switch">
-                  <input id="modeFullscreen" type="checkbox" />
-                  <span class="slider"></span>
+      <!-- Main Content -->
+      <main class="main-content">
+        <header class="app-header">
+          <h1>YouTube Chat Overlay</h1>
+          <p class="subtitle">設定は自動保存され、即座に反映されます</p>
+        </header>
+
+        <div class="panel">
+          <form id="settings-form">
+            
+            <!-- General Tab -->
+            <div id="general" class="tab-pane active">
+              <section class="settings-group">
+                <div class="group-header">
+                  <div class="group-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M2 10s3-3 7-3 7 3 7 3"/>
+                      <path d="M16 10s3-3 7-3 7 3 7 3"/>
+                      <path d="M9 13v10"/>
+                      <path d="M15 13v10"/>
+                      <path d="M9 20h6"/>
+                    </svg>
+                  </div>
+                  <h2 class="group-title">有効化する表示モード</h2>
                 </div>
-              </label>
-              
-              <label class="toggle-row">
-                <span class="label-text">シアターモード</span>
-                <div class="toggle-switch">
-                  <input id="modeTheater" type="checkbox" />
-                  <span class="slider"></span>
+                
+                <label class="toggle-row">
+                  <span class="label-text">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.5;">
+                      <rect width="20" height="14" x="2" y="3" rx="2"/>
+                      <line x1="8" x2="16" y1="21" y2="21"/>
+                      <line x1="12" x2="12" y1="17" y2="21"/>
+                    </svg>
+                    全画面モード
+                  </span>
+                  <div class="toggle-switch">
+                    <input id="modeFullscreen" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
+                
+                <label class="toggle-row">
+                  <span class="label-text">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.5;">
+                      <rect width="20" height="15" x="2" y="7" rx="2"/>
+                      <path d="M17 2v5"/>
+                      <path d="M12 2v5"/>
+                      <path d="M7 2v5"/>
+                    </svg>
+                    シアターモード
+                  </span>
+                  <div class="toggle-switch">
+                    <input id="modeTheater" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
+                
+                <label class="toggle-row">
+                  <span class="label-text">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.5;">
+                      <rect width="18" height="12" x="3" y="4" rx="2"/>
+                      <path d="M2 20h20"/>
+                    </svg>
+                    通常表示
+                  </span>
+                  <div class="toggle-switch">
+                    <input id="modeNormal" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
+              </section>
+
+              <section class="settings-group">
+                <div class="group-header">
+                  <div class="group-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/>
+                      <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
+                      <path d="M12 2v2"/>
+                      <path d="M12 20v2"/>
+                      <path d="m4.93 4.93 1.41 1.41"/>
+                      <path d="m17.66 17.66 1.41 1.41"/>
+                      <path d="M2 12h2"/>
+                      <path d="M20 12h2"/>
+                      <path d="m6.34 17.66-1.41 1.41"/>
+                      <path d="m19.07 4.93-1.41 1.41"/>
+                    </svg>
+                  </div>
+                  <h2 class="group-title">編集プロファイル設定</h2>
                 </div>
-              </label>
-              
-              <label class="toggle-row">
-                <span class="label-text">通常表示</span>
-                <div class="toggle-switch">
-                  <input id="modeNormal" type="checkbox" />
-                  <span class="slider"></span>
+                
+                <p class="hint">以下の設定は「モード × パネル状態」ごとに保存されます。</p>
+                
+                <div class="profile-selector">
+                  <div class="profile-select-wrapper">
+                    <label for="profileMode">編集対象モード</label>
+                    <select id="profileMode">
+                      <option value="fullscreen">全画面</option>
+                      <option value="theater">シアター</option>
+                      <option value="normal">通常表示</option>
+                    </select>
+                  </div>
+
+                  <div class="profile-select-wrapper">
+                    <label for="profilePanelState">チャットパネル状態</label>
+                    <select id="profilePanelState">
+                      <option value="closed">閉じている時</option>
+                      <option value="open">開いている時</option>
+                    </select>
+                  </div>
                 </div>
-              </label>
-            </section>
 
-            <section class="settings-group">
-              <h2 class="group-title">編集プロファイル設定</h2>
-              <p class="hint">以下の設定は「モード × パネル状態」ごとに保存されます。</p>
-              
-              <div class="field-row">
-                <label for="profileMode">編集対象モード</label>
-                <select id="profileMode">
-                  <option value="fullscreen">全画面</option>
-                  <option value="theater">シアター</option>
-                  <option value="normal">通常表示</option>
-                </select>
-              </div>
+                <label class="toggle-row">
+                  <span class="label-text">文字サイズを全設定で共通にする（オフで個別）</span>
+                  <div class="toggle-switch">
+                    <input id="shareFontSize" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
 
-              <div class="field-row">
-                <label for="profilePanelState">チャットパネル状態</label>
-                <select id="profilePanelState">
-                  <option value="closed">閉じている時</option>
-                  <option value="open">開いている時</option>
-                </select>
-              </div>
+                <label class="toggle-row">
+                  <span class="label-text">行間隔を全設定で共通にする（オフで個別）</span>
+                  <div class="toggle-switch">
+                    <input id="shareRowGap" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
 
-              <label class="toggle-row">
-                <span class="label-text">文字サイズを全設定で共通にする</span>
-                <div class="toggle-switch">
-                  <input id="shareFontSize" type="checkbox" />
-                  <span class="slider"></span>
+                <label class="toggle-row">
+                  <span class="label-text">レーン幅を全設定で共通にする（オフで個別）</span>
+                  <div class="toggle-switch">
+                    <input id="shareLaneWidth" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
+
+                <label class="toggle-row">
+                  <span class="label-text">文字の太さを全設定で共通にする（オフで個別）</span>
+                  <div class="toggle-switch">
+                    <input id="shareFontWeight" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
+
+                <label class="toggle-row">
+                  <span class="label-text">アバターサイズを全設定で共通にする（オフで個別）</span>
+                  <div class="toggle-switch">
+                    <input id="shareAvatarSize" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
+
+                <label class="toggle-row">
+                  <span class="label-text">縁取り太さを全設定で共通にする（オフで個別）</span>
+                  <div class="toggle-switch">
+                    <input id="shareStrokeWidth" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
+
+                <label class="toggle-row">
+                  <span class="label-text">文字不透明度を全設定で共通にする（オフで個別）</span>
+                  <div class="toggle-switch">
+                    <input id="shareTextOpacity" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
+
+                <label class="toggle-row">
+                  <span class="label-text">背景不透明度を全設定で共通にする（オフで個別）</span>
+                  <div class="toggle-switch">
+                    <input id="shareMessageBgOpacity" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
+
+                <label class="toggle-row">
+                  <span class="label-text">基準設定を全設定で共通にする</span>
+                  <div class="toggle-switch">
+                    <input id="shareAnchorSettings" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
+              </section>
+            </div>
+
+            <!-- Appearance Tab -->
+            <div id="appearance" class="tab-pane">
+              <section class="settings-group">
+                <div class="group-header">
+                  <div class="group-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-1 1.5-2 1.5-3.5A6 6 0 0 0 6 8c0 1 .5 2 1.5 3.5.8.8 1.3 1.5 1.5 2.5"/>
+                      <path d="M9 18h6"/>
+                      <path d="M10 22h4"/>
+                    </svg>
+                  </div>
+                  <h2 class="group-title">表示要素</h2>
                 </div>
-              </label>
+                
+                <label class="toggle-row">
+                  <span class="label-text">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.5;">
+                      <circle cx="12" cy="8" r="5"/>
+                      <path d="M20 21a8 8 0 0 0-16 0"/>
+                    </svg>
+                    アバターを表示
+                  </span>
+                  <div class="toggle-switch">
+                    <input id="showAvatar" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
 
-              <label class="toggle-row">
-                <span class="label-text">基準設定を全設定で共通にする</span>
-                <div class="toggle-switch">
-                  <input id="shareAnchorSettings" type="checkbox" />
-                  <span class="slider"></span>
+                <label class="toggle-row">
+                  <span class="label-text">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.5;">
+                      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+                      <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    名前（@xxx）を表示
+                  </span>
+                  <div class="toggle-switch">
+                    <input id="showAuthorName" type="checkbox" />
+                    <span class="slider"></span>
+                  </div>
+                </label>
+
+                <div class="field-row" style="margin-top: 12px;">
+                  <label for="identityAlign">アイコン・名前の位置</label>
+                  <select id="identityAlign">
+                    <option value="left">左</option>
+                    <option value="right">右</option>
+                  </select>
                 </div>
-              </label>
-            </section>
-          </div>
+              </section>
 
-          <div id="appearance" class="tab-pane">
-            <section class="settings-group">
-              <h2 class="group-title">表示要素</h2>
-              <label class="toggle-row">
-                <span class="label-text">アバターを表示</span>
-                <div class="toggle-switch">
-                  <input id="showAvatar" type="checkbox" />
-                  <span class="slider"></span>
+              <section class="settings-group">
+                <div class="group-header">
+                  <div class="group-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="13.5" cy="6.5" r="2.5" />
+                      <path d="M13.5 9c-2.5 0-3.5 1.5-3.5 3.5V13h7v-.5c0-2-1-3.5-3.5-3.5z" />
+                      <path d="M20 21V10a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11" />
+                      <path d="M2 21h20" />
+                    </svg>
+                  </div>
+                  <h2 class="group-title">文字色</h2>
                 </div>
-              </label>
+                <p class="hint">色設定は全画面・シアター・通常表示ですべて共通です。</p>
 
-              <label class="toggle-row">
-                <span class="label-text">名前（@xxx）を表示</span>
-                <div class="toggle-switch">
-                  <input id="showAuthorName" type="checkbox" />
-                  <span class="slider"></span>
+                <div class="field-row">
+                  <label for="authorNameColorMember">名前色（メンバー）</label>
+                  <input id="authorNameColorMember" type="color" />
                 </div>
-              </label>
+                <div class="field-row">
+                  <label for="authorNameColorNonMember">名前色（非メンバー）</label>
+                  <input id="authorNameColorNonMember" type="color" />
+                </div>
+                <div class="field-row">
+                  <label for="commentTextColor">コメント色</label>
+                  <input id="commentTextColor" type="color" />
+                </div>
+              </section>
 
-              <div class="field-row">
-                <label for="identityAlign">アイコン・名前の位置</label>
-                <select id="identityAlign">
-                  <option value="left">左</option>
-                  <option value="right">右</option>
-                </select>
-              </div>
-            </section>
+              <section class="settings-group">
+                <div class="group-header">
+                  <div class="group-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M4 7V4h3"/>
+                      <path d="M4 17v3h3"/>
+                      <path d="M20 7V4h-3"/>
+                      <path d="M20 17v3h-3"/>
+                      <path d="M9 9h6v6H9z"/>
+                    </svg>
+                  </div>
+                  <h2 class="group-title">テキスト・サイズ</h2>
+                </div>
+                
+                <div class="field-row">
+                  <label for="fontSizePx">文字サイズ (px)</label>
+                  <input id="fontSizePx" type="number" min="12" max="64" step="1" />
+                </div>
+                <div class="field-row">
+                  <label for="fontWeight">文字の太さ</label>
+                  <input id="fontWeight" type="number" min="100" max="900" step="100" />
+                </div>
+                <div class="field-row">
+                  <label for="avatarSizePx">アバターサイズ (px)</label>
+                  <input id="avatarSizePx" type="number" min="24" max="96" step="1" />
+                </div>
+                <div class="field-row">
+                  <label for="strokePx">縁取り太さ (px)</label>
+                  <input id="strokePx" type="number" min="0" max="4" step="0.1" />
+                </div>
+              </section>
 
-            <section class="settings-group">
-              <h2 class="group-title">テキスト・サイズ</h2>
-              <div class="field-row">
-                <label for="fontSizePx">文字サイズ (px)</label>
-                <input id="fontSizePx" type="number" min="12" max="64" step="1" />
-              </div>
-              <div class="field-row">
-                <label for="fontWeight">文字の太さ</label>
-                <input id="fontWeight" type="number" min="100" max="900" step="100" />
-              </div>
-              <div class="field-row">
-                <label for="avatarSizePx">アバターサイズ (px)</label>
-                <input id="avatarSizePx" type="number" min="24" max="96" step="1" />
-              </div>
-              <div class="field-row">
-                <label for="strokePx">縁取り太さ (px)</label>
-                <input id="strokePx" type="number" min="0" max="4" step="0.1" />
-              </div>
-            </section>
+              <section class="settings-group">
+                <div class="group-header">
+                  <div class="group-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M12 2a7 7 0 1 0 10 10"/>
+                    </svg>
+                  </div>
+                  <h2 class="group-title">不透明度</h2>
+                </div>
+                
+                <div class="field-row">
+                  <label for="textOpacity">文字不透明度</label>
+                  <input id="textOpacity" type="number" min="0.1" max="1" step="0.05" />
+                </div>
+                <div class="field-row">
+                  <label for="messageBgOpacity">背景不透明度</label>
+                  <input id="messageBgOpacity" type="number" min="0" max="0.9" step="0.05" />
+                </div>
+              </section>
+            </div>
 
-            <section class="settings-group">
-              <h2 class="group-title">不透明度</h2>
-              <div class="field-row">
-                <label for="textOpacity">文字不透明度 (0.1-1.0)</label>
-                <input id="textOpacity" type="number" min="0.1" max="1" step="0.05" />
-              </div>
-              <div class="field-row">
-                <label for="messageBgOpacity">背景不透明度 (0-0.9)</label>
-                <input id="messageBgOpacity" type="number" min="0" max="0.9" step="0.05" />
-              </div>
-            </section>
-          </div>
+            <!-- Layout Tab -->
+            <div id="layout" class="tab-pane">
+              <section class="settings-group">
+                <div class="group-header">
+                  <div class="group-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M4 5h16"/>
+                      <path d="M9 12h11"/>
+                      <path d="M4 19h16"/>
+                      <path d="M4 12h3"/>
+                    </svg>
+                  </div>
+                  <h2 class="group-title">レイアウト・配置</h2>
+                </div>
+                
+                <div class="field-row">
+                  <label for="laneWidthPercent">レーン幅 (%)</label>
+                  <input id="laneWidthPercent" type="number" min="20" max="80" step="1" />
+                </div>
+                <div class="field-row">
+                  <label for="rowGapPx">行間隔 (px)</label>
+                  <input id="rowGapPx" type="number" min="0" max="24" step="1" />
+                </div>
+                <div class="field-row">
+                  <label for="horizontalAlign">横位置アンカー</label>
+                  <select id="horizontalAlign">
+                    <option value="left">左基準</option>
+                    <option value="right">右基準</option>
+                  </select>
+                </div>
+                <div class="field-row">
+                  <label for="verticalAlign">縦位置アンカー</label>
+                  <select id="verticalAlign">
+                    <option value="bottom">下基準</option>
+                    <option value="top">上基準</option>
+                  </select>
+                </div>
+                <div class="field-row">
+                  <label for="offsetXPx">横オフセット (px)</label>
+                  <input id="offsetXPx" type="number" min="0" max="1920" step="1" />
+                </div>
+                <div class="field-row">
+                  <label for="offsetYPx">縦オフセット (px)</label>
+                  <input id="offsetYPx" type="number" min="0" max="1080" step="1" />
+                </div>
+              </section>
 
-          <div id="layout" class="tab-pane">
-            <section class="settings-group">
-              <h2 class="group-title">レイアウト・配置</h2>
-              <div class="field-row">
-                <label for="laneWidthPercent">レーン幅 (%)</label>
-                <input id="laneWidthPercent" type="number" min="20" max="80" step="1" />
-              </div>
-              <div class="field-row">
-                <label for="rowGapPx">行間隔 (px)</label>
-                <input id="rowGapPx" type="number" min="0" max="24" step="1" />
-              </div>
-              <div class="field-row">
-                <label for="horizontalAlign">横位置アンカー</label>
-                <select id="horizontalAlign">
-                  <option value="left">左基準</option>
-                  <option value="right">右基準</option>
-                </select>
-              </div>
-              <div class="field-row">
-                <label for="verticalAlign">縦位置アンカー</label>
-                <select id="verticalAlign">
-                  <option value="bottom">下基準</option>
-                  <option value="top">上基準</option>
-                </select>
-              </div>
-              <div class="field-row">
-                <label for="offsetXPx">横オフセット (px)</label>
-                <input id="offsetXPx" type="number" min="0" max="1920" step="1" />
-              </div>
-              <div class="field-row">
-                <label for="offsetYPx">縦オフセット (px)</label>
-                <input id="offsetYPx" type="number" min="0" max="1080" step="1" />
-              </div>
-            </section>
+              <section class="settings-group">
+                <div class="group-header">
+                  <div class="group-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 8v4l3 3"/>
+                      <circle cx="12" cy="12" r="10"/>
+                    </svg>
+                  </div>
+                  <h2 class="group-title">表示・アニメーション</h2>
+                </div>
+                
+                <div class="field-row">
+                  <label for="maxVisible">最大表示件数</label>
+                  <input id="maxVisible" type="number" min="1" max="20" step="1" />
+                </div>
+                <div class="field-row">
+                  <label for="fadeOutTrigger">フェードアウト条件</label>
+                  <select id="fadeOutTrigger">
+                    <option value="timer">表示時間でフェード</option>
+                    <option value="overflow">上限到達時にフェード</option>
+                  </select>
+                </div>
+                <div class="field-row">
+                  <label for="ttlMs">表示時間 (ms)</label>
+                  <input id="ttlMs" type="number" min="1000" max="30000" step="100" />
+                </div>
+                <div class="field-row">
+                  <label for="fadeMs">フェード時間 (ms)</label>
+                  <input id="fadeMs" type="number" min="0" max="2000" step="10" />
+                </div>
+                <div class="field-row">
+                  <label for="sequentialFadeSec">連続フェード間隔 (秒)</label>
+                  <input id="sequentialFadeSec" type="number" min="0" max="10" step="0.1" />
+                </div>
+              </section>
+            </div>
 
-            <section class="settings-group">
-              <h2 class="group-title">表示・アニメーション</h2>
-              <div class="field-row">
-                <label for="maxVisible">最大表示件数</label>
-                <input id="maxVisible" type="number" min="1" max="20" step="1" />
-              </div>
-              <div class="field-row">
-                <label for="fadeOutTrigger">フェードアウト条件</label>
-                <select id="fadeOutTrigger">
-                  <option value="timer">表示時間でフェード</option>
-                  <option value="overflow">上限到達時にフェード</option>
-                </select>
-              </div>
-              <div class="field-row">
-                <label for="ttlMs">表示時間 (ms)</label>
-                <input id="ttlMs" type="number" min="1000" max="30000" step="100" />
-              </div>
-              <div class="field-row">
-                <label for="fadeMs">フェード時間 (ms)</label>
-                <input id="fadeMs" type="number" min="0" max="2000" step="10" />
-              </div>
-              <div class="field-row">
-                <label for="sequentialFadeSec">連続フェード間隔 (秒)</label>
-                <input id="sequentialFadeSec" type="number" min="0" max="10" step="0.1" />
-              </div>
-            </section>
-          </div>
+          </form>
+        </div>
 
-        </form>
+        <footer class="app-footer">
+          <button id="resetButton" class="btn-reset" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+            デフォルトに戻す
+          </button>
+          <span id="status" class="status-message" aria-live="polite"></span>
+        </footer>
       </main>
-
-      <footer class="app-footer">
-        <button id="resetButton" class="btn-reset" type="button">デフォルトに戻す</button>
-        <span id="status" class="status-message" aria-live="polite"></span>
-      </footer>
     </div>
 
     <script src="popup.js"></script>
-    
-    <script>
-      document.addEventListener("DOMContentLoaded", () => {
-        const tabBtns = document.querySelectorAll(".tab-btn");
-        const tabPanes = document.querySelectorAll(".tab-pane");
-
-        tabBtns.forEach(btn => {
-          btn.addEventListener("click", () => {
-            // アクティブクラスの初期化
-            tabBtns.forEach(b => b.classList.remove("active"));
-            tabPanes.forEach(p => p.classList.remove("active"));
-            
-            // 選択されたタブをアクティブ化
-            btn.classList.add("active");
-            document.getElementById(btn.getAttribute("data-tab")).classList.add("active");
-          });
-        });
-      });
-    </script>
   </body>
 </html>

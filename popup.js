@@ -35,11 +35,21 @@
     textOpacity: 1,
     messageBgOpacity: 0.28,
     showAvatar: true,
-    showAuthorName: true
+    showAuthorName: true,
+    authorNameColorMember: "#4facfe",
+    authorNameColorNonMember: "#2bc963",
+    commentTextColor: "#ffffff"
   };
 
   const DEFAULT_SHARED_PROFILE_FIELDS = {
     fontSizePx: false,
+    rowGapPx: false,
+    laneWidthPercent: false,
+    fontWeight: false,
+    avatarSizePx: false,
+    strokePx: false,
+    textOpacity: true,
+    messageBgOpacity: true,
     anchorSettings: false
   };
 
@@ -123,6 +133,11 @@
       fallback: DEFAULT_MODE_PROFILE.messageBgOpacity
     }
   };
+  const COLOR_FIELDS = {
+    authorNameColorMember: { fallback: DEFAULT_MODE_PROFILE.authorNameColorMember },
+    authorNameColorNonMember: { fallback: DEFAULT_MODE_PROFILE.authorNameColorNonMember },
+    commentTextColor: { fallback: DEFAULT_MODE_PROFILE.commentTextColor }
+  };
 
   const PROFILE_SELECT_FIELDS = {
     fadeOutTrigger: {
@@ -144,17 +159,45 @@
   };
 
   const MODE_CHECKBOX_IDS = ["modeFullscreen", "modeTheater", "modeNormal"];
-  const SHARED_PROFILE_TOGGLE_IDS = ["shareFontSize", "shareAnchorSettings"];
+  const SHARED_PROFILE_TOGGLE_IDS = [
+    "shareFontSize",
+    "shareRowGap",
+    "shareLaneWidth",
+    "shareFontWeight",
+    "shareAvatarSize",
+    "shareStrokeWidth",
+    "shareTextOpacity",
+    "shareMessageBgOpacity",
+    "shareAnchorSettings"
+  ];
   const SHARED_PROFILE_TOGGLE_TO_KEY = {
     shareFontSize: "fontSizePx",
+    shareRowGap: "rowGapPx",
+    shareLaneWidth: "laneWidthPercent",
+    shareFontWeight: "fontWeight",
+    shareAvatarSize: "avatarSizePx",
+    shareStrokeWidth: "strokePx",
+    shareTextOpacity: "textOpacity",
+    shareMessageBgOpacity: "messageBgOpacity",
     shareAnchorSettings: "anchorSettings"
   };
   const PROFILE_CHECKBOX_IDS = ["showAvatar", "showAuthorName"];
   const PROFILE_NUMERIC_IDS = Object.keys(NUMERIC_FIELDS);
   const PROFILE_SELECT_IDS = Object.keys(PROFILE_SELECT_FIELDS);
-  const SHARED_OPACITY_IDS = ["textOpacity", "messageBgOpacity"];
+  const PROFILE_COLOR_IDS = Object.keys(COLOR_FIELDS);
+  const SHARED_COLOR_IDS = PROFILE_COLOR_IDS;
   const SHARED_ANCHOR_FIELD_IDS = ["horizontalAlign", "verticalAlign", "identityAlign"];
   const SHARED_BEHAVIOR_SELECT_IDS = ["fadeOutTrigger"];
+  const SHARED_NUMERIC_FIELDS = {
+    fontSizePx: "fontSizePx",
+    rowGapPx: "rowGapPx",
+    laneWidthPercent: "laneWidthPercent",
+    fontWeight: "fontWeight",
+    avatarSizePx: "avatarSizePx",
+    strokePx: "strokePx",
+    textOpacity: "textOpacity",
+    messageBgOpacity: "messageBgOpacity"
+  };
 
   const form = document.getElementById("settings-form");
   const resetButton = document.getElementById("resetButton");
@@ -186,6 +229,23 @@
     }
     const digits = (String(step).split(".")[1] || "").length;
     return Number(next.toFixed(digits));
+  }
+
+  function normalizeColor(value, fallback) {
+    const raw = String(value || "").trim();
+    const matched = raw.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+    if (!matched) {
+      return fallback;
+    }
+    const hex = matched[1];
+    if (hex.length === 3) {
+      return `#${hex
+        .split("")
+        .map((chunk) => `${chunk}${chunk}`)
+        .join("")
+        .toLowerCase()}`;
+    }
+    return `#${hex.toLowerCase()}`;
   }
 
   function normalizeModeProfile(rawProfile, fallbackProfile) {
@@ -424,7 +484,22 @@
       showAuthorName:
         typeof input.showAuthorName === "boolean"
           ? input.showAuthorName
-          : fallback.showAuthorName
+          : fallback.showAuthorName,
+      authorNameColorMember: normalizeColor(
+        input.authorNameColorMember,
+        normalizeColor(fallback.authorNameColorMember, DEFAULT_MODE_PROFILE.authorNameColorMember)
+      ),
+      authorNameColorNonMember: normalizeColor(
+        input.authorNameColorNonMember,
+        normalizeColor(
+          fallback.authorNameColorNonMember,
+          DEFAULT_MODE_PROFILE.authorNameColorNonMember
+        )
+      ),
+      commentTextColor: normalizeColor(
+        input.commentTextColor,
+        normalizeColor(fallback.commentTextColor, DEFAULT_MODE_PROFILE.commentTextColor)
+      )
     };
   }
 
@@ -449,6 +524,34 @@
         typeof input.fontSizePx === "boolean"
           ? input.fontSizePx
           : DEFAULT_SHARED_PROFILE_FIELDS.fontSizePx,
+      rowGapPx:
+        typeof input.rowGapPx === "boolean"
+          ? input.rowGapPx
+          : DEFAULT_SHARED_PROFILE_FIELDS.rowGapPx,
+      laneWidthPercent:
+        typeof input.laneWidthPercent === "boolean"
+          ? input.laneWidthPercent
+          : DEFAULT_SHARED_PROFILE_FIELDS.laneWidthPercent,
+      fontWeight:
+        typeof input.fontWeight === "boolean"
+          ? input.fontWeight
+          : DEFAULT_SHARED_PROFILE_FIELDS.fontWeight,
+      avatarSizePx:
+        typeof input.avatarSizePx === "boolean"
+          ? input.avatarSizePx
+          : DEFAULT_SHARED_PROFILE_FIELDS.avatarSizePx,
+      strokePx:
+        typeof input.strokePx === "boolean"
+          ? input.strokePx
+          : DEFAULT_SHARED_PROFILE_FIELDS.strokePx,
+      textOpacity:
+        typeof input.textOpacity === "boolean"
+          ? input.textOpacity
+          : DEFAULT_SHARED_PROFILE_FIELDS.textOpacity,
+      messageBgOpacity:
+        typeof input.messageBgOpacity === "boolean"
+          ? input.messageBgOpacity
+          : DEFAULT_SHARED_PROFILE_FIELDS.messageBgOpacity,
       anchorSettings:
         typeof input.anchorSettings === "boolean"
           ? input.anchorSettings
@@ -522,19 +625,17 @@
       }
     }
 
-    const sharedTextOpacity = clampNumber(
-      input.textOpacity,
-      NUMERIC_FIELDS.textOpacity.min,
-      NUMERIC_FIELDS.textOpacity.max,
-      panelModeProfiles.closed.fullscreen.textOpacity,
-      NUMERIC_FIELDS.textOpacity.step
+    const sharedAuthorNameColorMember = normalizeColor(
+      input.authorNameColorMember,
+      panelModeProfiles.closed.fullscreen.authorNameColorMember
     );
-    const sharedMessageBgOpacity = clampNumber(
-      input.messageBgOpacity,
-      NUMERIC_FIELDS.messageBgOpacity.min,
-      NUMERIC_FIELDS.messageBgOpacity.max,
-      panelModeProfiles.closed.fullscreen.messageBgOpacity,
-      NUMERIC_FIELDS.messageBgOpacity.step
+    const sharedAuthorNameColorNonMember = normalizeColor(
+      input.authorNameColorNonMember,
+      panelModeProfiles.closed.fullscreen.authorNameColorNonMember
+    );
+    const sharedCommentTextColor = normalizeColor(
+      input.commentTextColor,
+      panelModeProfiles.closed.fullscreen.commentTextColor
     );
     const sharedFadeOutTrigger = PROFILE_SELECT_FIELDS.fadeOutTrigger.values.includes(
       input.fadeOutTrigger
@@ -543,8 +644,11 @@
       : panelModeProfiles.closed.fullscreen.fadeOutTrigger;
     for (const panelState of PANEL_STATE_KEYS) {
       for (const mode of MODE_KEYS) {
-        panelModeProfiles[panelState][mode].textOpacity = sharedTextOpacity;
-        panelModeProfiles[panelState][mode].messageBgOpacity = sharedMessageBgOpacity;
+        panelModeProfiles[panelState][mode].authorNameColorMember =
+          sharedAuthorNameColorMember;
+        panelModeProfiles[panelState][mode].authorNameColorNonMember =
+          sharedAuthorNameColorNonMember;
+        panelModeProfiles[panelState][mode].commentTextColor = sharedCommentTextColor;
         panelModeProfiles[panelState][mode].fadeOutTrigger = sharedFadeOutTrigger;
       }
     }
@@ -554,6 +658,81 @@
       for (const panelState of PANEL_STATE_KEYS) {
         for (const mode of MODE_KEYS) {
           panelModeProfiles[panelState][mode].fontSizePx = sharedFontSize;
+        }
+      }
+    }
+
+    if (sharedProfileFields.rowGapPx) {
+      const sharedRowGap = panelModeProfiles.closed.fullscreen.rowGapPx;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].rowGapPx = sharedRowGap;
+        }
+      }
+    }
+
+    if (sharedProfileFields.laneWidthPercent) {
+      const sharedLaneWidthPercent = panelModeProfiles.closed.fullscreen.laneWidthPercent;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].laneWidthPercent = sharedLaneWidthPercent;
+        }
+      }
+    }
+
+    if (sharedProfileFields.fontWeight) {
+      const sharedFontWeight = panelModeProfiles.closed.fullscreen.fontWeight;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].fontWeight = sharedFontWeight;
+        }
+      }
+    }
+
+    if (sharedProfileFields.avatarSizePx) {
+      const sharedAvatarSizePx = panelModeProfiles.closed.fullscreen.avatarSizePx;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].avatarSizePx = sharedAvatarSizePx;
+        }
+      }
+    }
+
+    if (sharedProfileFields.strokePx) {
+      const sharedStrokePx = panelModeProfiles.closed.fullscreen.strokePx;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].strokePx = sharedStrokePx;
+        }
+      }
+    }
+
+    if (sharedProfileFields.textOpacity) {
+      const sharedTextOpacity = clampNumber(
+        input.textOpacity,
+        NUMERIC_FIELDS.textOpacity.min,
+        NUMERIC_FIELDS.textOpacity.max,
+        panelModeProfiles.closed.fullscreen.textOpacity,
+        NUMERIC_FIELDS.textOpacity.step
+      );
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].textOpacity = sharedTextOpacity;
+        }
+      }
+    }
+
+    if (sharedProfileFields.messageBgOpacity) {
+      const sharedMessageBgOpacity = clampNumber(
+        input.messageBgOpacity,
+        NUMERIC_FIELDS.messageBgOpacity.min,
+        NUMERIC_FIELDS.messageBgOpacity.max,
+        panelModeProfiles.closed.fullscreen.messageBgOpacity,
+        NUMERIC_FIELDS.messageBgOpacity.step
+      );
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].messageBgOpacity = sharedMessageBgOpacity;
         }
       }
     }
@@ -694,6 +873,15 @@
         }
       }
     }
+
+    for (const id of PROFILE_COLOR_IDS) {
+      const node = document.getElementById(id);
+      if (node instanceof HTMLInputElement) {
+        const meta = COLOR_FIELDS[id];
+        const fallback = meta ? meta.fallback : "#ffffff";
+        node.value = normalizeColor(targetProfile[id], fallback);
+      }
+    }
   }
 
   function renderFormFromState() {
@@ -770,7 +958,7 @@
     profile[id] = value;
   }
 
-  function updateSharedOpacityField(id, value) {
+  function updateSharedColorField(id, value) {
     for (const panelState of PANEL_STATE_KEYS) {
       for (const mode of MODE_KEYS) {
         currentSettings.panelModeProfiles[panelState][mode][id] = value;
@@ -801,6 +989,41 @@
     const profile = getCurrentProfile();
     if (sharedKey === "fontSizePx") {
       updateFieldAcrossProfiles("fontSizePx", profile.fontSizePx);
+      return;
+    }
+
+    if (sharedKey === "rowGapPx") {
+      updateFieldAcrossProfiles("rowGapPx", profile.rowGapPx);
+      return;
+    }
+
+    if (sharedKey === "laneWidthPercent") {
+      updateFieldAcrossProfiles("laneWidthPercent", profile.laneWidthPercent);
+      return;
+    }
+
+    if (sharedKey === "fontWeight") {
+      updateFieldAcrossProfiles("fontWeight", profile.fontWeight);
+      return;
+    }
+
+    if (sharedKey === "avatarSizePx") {
+      updateFieldAcrossProfiles("avatarSizePx", profile.avatarSizePx);
+      return;
+    }
+
+    if (sharedKey === "strokePx") {
+      updateFieldAcrossProfiles("strokePx", profile.strokePx);
+      return;
+    }
+
+    if (sharedKey === "textOpacity") {
+      updateFieldAcrossProfiles("textOpacity", profile.textOpacity);
+      return;
+    }
+
+    if (sharedKey === "messageBgOpacity") {
+      updateFieldAcrossProfiles("messageBgOpacity", profile.messageBgOpacity);
       return;
     }
 
@@ -904,6 +1127,10 @@
     }
 
     if (PROFILE_NUMERIC_IDS.includes(id) && target instanceof HTMLInputElement) {
+      // Let users complete numeric typing first; commit value on change.
+      if (event.type === "input") {
+        return;
+      }
       const meta = NUMERIC_FIELDS[id];
       const fallback = getCurrentProfile()[id];
       const clamped = clampNumber(
@@ -914,9 +1141,8 @@
         meta.step
       );
       target.value = String(clamped);
-      if (SHARED_OPACITY_IDS.includes(id)) {
-        updateSharedOpacityField(id, clamped);
-      } else if (id === "fontSizePx" && isSharedFieldEnabled("fontSizePx")) {
+      const sharedKey = SHARED_NUMERIC_FIELDS[id];
+      if (sharedKey && isSharedFieldEnabled(sharedKey)) {
         updateFieldAcrossProfiles(id, clamped);
       } else if (id === "offsetXPx") {
         const profile = getCurrentProfile();
@@ -931,6 +1157,31 @@
       } else {
         updateCurrentProfileField(id, clamped);
       }
+      queueSave();
+      return;
+    }
+
+    if (
+      PROFILE_COLOR_IDS.includes(id) &&
+      target instanceof HTMLInputElement &&
+      target.type === "color"
+    ) {
+      const meta = COLOR_FIELDS[id];
+      const profile = getCurrentProfile();
+      const fallback =
+        profile && typeof profile[id] === "string" && profile[id]
+          ? profile[id]
+          : meta
+            ? meta.fallback
+            : "#ffffff";
+      const normalized = normalizeColor(target.value, fallback);
+      target.value = normalized;
+      if (SHARED_COLOR_IDS.includes(id)) {
+        updateSharedColorField(id, normalized);
+      } else {
+        updateCurrentProfileField(id, normalized);
+      }
+      setProfileFields(getCurrentProfile());
       queueSave();
     }
   }
@@ -986,15 +1237,15 @@
 // タブ切り替え処理 (UI制御用)
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
-  const tabBtns = document.querySelectorAll(".tab-btn");
+  const navBtns = document.querySelectorAll(".nav-btn");
   const tabPanes = document.querySelectorAll(".tab-pane");
 
-  if (!tabBtns.length || !tabPanes.length) return;
+  if (!navBtns.length || !tabPanes.length) return;
 
-  tabBtns.forEach(btn => {
+  navBtns.forEach(btn => {
     btn.addEventListener("click", () => {
       // 全タブを非アクティブ化
-      tabBtns.forEach(b => b.classList.remove("active"));
+      navBtns.forEach(b => b.classList.remove("active"));
       tabPanes.forEach(p => p.classList.remove("active"));
       
       // クリックされたタブをアクティブ化

@@ -19,23 +19,21 @@
             fontWeight: 900
           });
 
+    // より自然で高品質なテキストシャドウを生成
     function createOutlineShadow(strokePx) {
       const distance = Math.max(0, Number(strokePx) || 0);
-      const shadows = [];
-
-      if (distance > 0) {
-        shadows.push(`${distance}px 0 0 rgba(0, 0, 0, 0.95)`);
-        shadows.push(`-${distance}px 0 0 rgba(0, 0, 0, 0.95)`);
-        shadows.push(`0 ${distance}px 0 rgba(0, 0, 0, 0.95)`);
-        shadows.push(`0 -${distance}px 0 rgba(0, 0, 0, 0.95)`);
-        shadows.push(`${distance}px ${distance}px 0 rgba(0, 0, 0, 0.95)`);
-        shadows.push(`${distance}px -${distance}px 0 rgba(0, 0, 0, 0.95)`);
-        shadows.push(`-${distance}px ${distance}px 0 rgba(0, 0, 0, 0.95)`);
-        shadows.push(`-${distance}px -${distance}px 0 rgba(0, 0, 0, 0.95)`);
-      }
-
-      shadows.push("0 2px 6px rgba(0, 0, 0, 0.85)");
-      return shadows.join(", ");
+      if (distance === 0) return "0 2px 8px rgba(0,0,0,0.6)";
+      
+      // テキストの可読性を高めるための多重シャドウ（プロ仕様の縁取り）
+      return `
+        0 0 ${distance}px rgba(0,0,0,0.8),
+        0 0 ${distance * 2}px rgba(0,0,0,0.8),
+        ${distance}px ${distance}px ${distance}px rgba(0,0,0,0.9),
+        -${distance}px -${distance}px ${distance}px rgba(0,0,0,0.9),
+        ${distance}px -${distance}px ${distance}px rgba(0,0,0,0.9),
+        -${distance}px ${distance}px ${distance}px rgba(0,0,0,0.9),
+        0 4px 12px rgba(0,0,0,0.5)
+      `.trim();
     }
 
     function createAvatarNode(message) {
@@ -43,7 +41,8 @@
       avatar.className = "yt-chat-overlay-avatar";
       avatar.style.borderRadius = "999px";
       avatar.style.overflow = "hidden";
-      avatar.style.border = "2px solid rgba(255, 255, 255, 0.65)";
+      avatar.style.border = "2px solid rgba(255, 255, 255, 0.8)";
+      avatar.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
       avatar.style.background = "rgba(255, 255, 255, 0.18)";
       avatar.style.display = "flex";
       avatar.style.alignItems = "center";
@@ -129,6 +128,43 @@
       }
     }
 
+    function resolveLineHeightPx(node, fallbackPx) {
+      if (!node) {
+        return fallbackPx;
+      }
+      try {
+        const computed = window.getComputedStyle(node);
+        const value = parseFloat(computed.lineHeight);
+        if (Number.isFinite(value) && value > 0) {
+          return value;
+        }
+      } catch (_error) {
+        // noop
+      }
+      return fallbackPx;
+    }
+
+    function shouldCenterTextAgainstAvatar(row, textWrap, body, fontSizePx) {
+      if (!row || !textWrap) {
+        return false;
+      }
+
+      const fallbackLineHeight = Math.max(14, Math.round((Number(fontSizePx) || 22) * 1.1));
+      const targetNode = body || textWrap;
+      if (!row.isConnected) {
+        const plain = String((targetNode && targetNode.textContent) || "");
+        return !plain.includes("\n");
+      }
+
+      const lineHeightPx = resolveLineHeightPx(targetNode, fallbackLineHeight);
+      const textHeightPx =
+        targetNode.getBoundingClientRect().height || targetNode.scrollHeight || 0;
+      if (textHeightPx <= 0) {
+        return false;
+      }
+      return textHeightPx <= lineHeightPx * 1.6;
+    }
+
     function applyRowStyles(row) {
       const profile = getCurrentModeProfile();
       const isIdentityRightAligned = profile.identityAlign === "right";
@@ -149,14 +185,26 @@
       row.style.gap = profile.showAvatar
         ? `${Math.max(6, Math.round(avatarSizePx * 0.2))}px`
         : "0px";
-      row.style.padding = `${Math.max(2, Math.round(fontSizePx * 0.12))}px ${Math.max(
-        8,
-        Math.round(fontSizePx * 0.45)
+      row.style.padding = `${Math.max(4, Math.round(fontSizePx * 0.2))}px ${Math.max(
+        12,
+        Math.round(fontSizePx * 0.6)
       )}px`;
+      
       const backgroundOpacity = Math.max(0, Number(profile.messageBgOpacity) || 0);
-      row.style.background = `rgba(0, 0, 0, ${backgroundOpacity})`;
-      row.style.borderRadius = `${Math.max(8, Math.round(fontSizePx * 0.55))}px`;
-      const backdropValue = backgroundOpacity > 0 ? "blur(1px)" : "none";
+      
+      // 背景をグラスモーフィズム（すりガラス）風に、スーパーチャット等の色を反映
+      const accentColor = row.dataset.accentColor;
+      if (accentColor && row.dataset.messageType === "paid") {
+        row.style.background = `linear-gradient(135deg, ${accentColor.replace('rgb', 'rgba').replace(')', `, ${backgroundOpacity * 0.5})`)} 0%, rgba(0, 0, 0, ${backgroundOpacity}) 100%)`;
+      } else if (accentColor && row.dataset.messageType === "membership") {
+        row.style.background = `linear-gradient(135deg, ${accentColor.replace('rgb', 'rgba').replace(')', `, ${backgroundOpacity * 0.4})`)} 0%, rgba(0, 0, 0, ${backgroundOpacity}) 100%)`;
+      } else {
+        row.style.background = `linear-gradient(135deg, rgba(255, 255, 255, ${backgroundOpacity * 0.2}) 0%, rgba(0, 0, 0, ${backgroundOpacity}) 100%)`;
+      }
+      
+      row.style.boxShadow = `0 4px 16px rgba(0, 0, 0, ${backgroundOpacity * 0.5}), inset 0 1px 1px rgba(255, 255, 255, ${backgroundOpacity * 0.3})`;
+      row.style.borderRadius = `${Math.max(12, Math.round(fontSizePx * 0.6))}px`;
+      const backdropValue = backgroundOpacity > 0 ? "blur(8px) saturate(120%)" : "none";
       row.style.backdropFilter = backdropValue;
       row.style.webkitBackdropFilter = backdropValue;
 
@@ -202,8 +250,12 @@
       }
 
       if (author) {
-        author.style.color =
+        const fallbackAuthorColor =
           row.dataset.accentColor || (typeInfo.text && typeInfo.text.fallbackColor) || "#ffffff";
+        const isMemberAuthor = row.dataset.authorMembership === "member";
+        author.style.color = isMemberAuthor
+          ? profile.authorNameColorMember || fallbackAuthorColor
+          : profile.authorNameColorNonMember || fallbackAuthorColor;
         author.style.display = profile.showAuthorName ? "inline" : "none";
         author.style.opacity = String(profile.textOpacity);
         author.style.fontWeight = String(profile.fontWeight);
@@ -248,7 +300,7 @@
       }
 
       if (body) {
-        body.style.color = "#ffffff";
+        body.style.color = profile.commentTextColor || "#ffffff";
         body.style.opacity = String(profile.textOpacity);
         body.style.fontWeight = String(profile.fontWeight);
         body.style.fontSize = `${fontSizePx}px`;
@@ -276,19 +328,25 @@
         emoji.style.margin = "0 0.08em";
         emoji.style.display = "inline-block";
       }
+
+      row.style.alignItems = shouldCenterTextAgainstAvatar(row, textWrap, body, fontSizePx)
+        ? "center"
+        : "flex-start";
     }
 
     function createMessageRow(message) {
-      const profile = getCurrentModeProfile();
-      const enterShiftPx = 8;
-      const enterShift =
-        profile.horizontalAlign === "right" ? enterShiftPx : -enterShiftPx;
       const row = document.createElement("div");
       row.dataset.messageId = message.id;
+      row.dataset.messageType = message.type || "text";
       row.dataset.accentColor = message.accentColor || "";
+      row.dataset.authorMembership =
+        message.isMember === true || message.type === "membership" ? "member" : "non-member";
+      
+      // 下方向から自然に現れるフェードイン
       row.style.opacity = "0";
-      row.style.transform = `translateX(${enterShift}px)`;
-      row.style.transition = "opacity 220ms ease, transform 220ms ease";
+      row.style.transform = "translateY(10px) scale(0.985)";
+      row.style.transition =
+        "opacity 360ms cubic-bezier(0.22, 1, 0.36, 1), transform 360ms cubic-bezier(0.22, 1, 0.36, 1)";
 
       const avatar = createAvatarNode(message);
       row.appendChild(avatar);
@@ -320,8 +378,9 @@
       applyRowStyles(row);
 
       window.requestAnimationFrame(() => {
+        applyRowStyles(row);
         row.style.opacity = "1";
-        row.style.transform = "translateX(0)";
+        row.style.transform = "translateY(0) scale(1)";
       });
 
       return row;

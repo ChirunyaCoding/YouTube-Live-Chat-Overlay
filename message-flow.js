@@ -29,9 +29,101 @@
         ? deps.syncDragOverlayLayout
         : () => {};
 
+    // When comment velocity spikes, temporarily force overflow fade mode.
+    const FLOW_SURGE_WINDOW_MS = 3000;
+    const FLOW_SURGE_THRESHOLD = 8;
+    const FLOW_SURGE_HOLD_MS = 7000;
+    const flowSurgeState = {
+      arrivalTimes: [],
+      forcedOverflowActive: false,
+      forcedOverflowUntilMs: 0,
+      releaseTimer: 0
+    };
+
     function isOverflowFadeMode(profile) {
       const source = profile && typeof profile === "object" ? profile : getCurrentModeProfile();
-      return source && source.fadeOutTrigger === "overflow";
+      return (source && source.fadeOutTrigger === "overflow") || isForcedOverflowActive();
+    }
+
+    function isForcedOverflowActive(nowMs) {
+      const now = typeof nowMs === "number" ? nowMs : Date.now();
+      if (!flowSurgeState.forcedOverflowActive) {
+        return false;
+      }
+      if (now < flowSurgeState.forcedOverflowUntilMs) {
+        return true;
+      }
+      deactivateForcedOverflow();
+      return false;
+    }
+
+    function pruneFlowArrivalHistory(nowMs) {
+      const cutoff = nowMs - FLOW_SURGE_WINDOW_MS;
+      while (flowSurgeState.arrivalTimes.length > 0 && flowSurgeState.arrivalTimes[0] < cutoff) {
+        flowSurgeState.arrivalTimes.shift();
+      }
+    }
+
+    function clearForcedOverflowReleaseTimer() {
+      if (flowSurgeState.releaseTimer) {
+        window.clearTimeout(flowSurgeState.releaseTimer);
+        flowSurgeState.releaseTimer = 0;
+      }
+    }
+
+    function scheduleForcedOverflowReleaseTimer() {
+      clearForcedOverflowReleaseTimer();
+      const now = Date.now();
+      const remaining = flowSurgeState.forcedOverflowUntilMs - now;
+      if (remaining <= 0) {
+        deactivateForcedOverflow();
+        return;
+      }
+
+      flowSurgeState.releaseTimer = window.setTimeout(() => {
+        flowSurgeState.releaseTimer = 0;
+        deactivateForcedOverflow();
+      }, remaining);
+    }
+
+    function activateForcedOverflow(nowMs) {
+      const nextUntil = nowMs + FLOW_SURGE_HOLD_MS;
+      const wasActive = flowSurgeState.forcedOverflowActive;
+      flowSurgeState.forcedOverflowActive = true;
+      flowSurgeState.forcedOverflowUntilMs = Math.max(flowSurgeState.forcedOverflowUntilMs, nextUntil);
+      scheduleForcedOverflowReleaseTimer();
+
+      if (!wasActive) {
+        syncFadeOutModeForVisibleMessages();
+      }
+    }
+
+    function deactivateForcedOverflow() {
+      if (!flowSurgeState.forcedOverflowActive) {
+        clearForcedOverflowReleaseTimer();
+        return;
+      }
+
+      flowSurgeState.forcedOverflowActive = false;
+      flowSurgeState.forcedOverflowUntilMs = 0;
+      clearForcedOverflowReleaseTimer();
+      syncFadeOutModeForVisibleMessages();
+    }
+
+    function recordMessageVelocitySample() {
+      const now = Date.now();
+      flowSurgeState.arrivalTimes.push(now);
+      pruneFlowArrivalHistory(now);
+      if (flowSurgeState.arrivalTimes.length >= FLOW_SURGE_THRESHOLD) {
+        activateForcedOverflow(now);
+      }
+    }
+
+    function resetFlowSurgeState() {
+      flowSurgeState.arrivalTimes = [];
+      flowSurgeState.forcedOverflowActive = false;
+      flowSurgeState.forcedOverflowUntilMs = 0;
+      clearForcedOverflowReleaseTimer();
     }
 
     function clearExpiredQueue() {
@@ -104,6 +196,7 @@
         return;
       }
 
+      recordMessageVelocitySample();
       state.renderQueue.push(message);
       scheduleFlush();
     }
@@ -159,6 +252,7 @@
         text,
         messageRuns: [{ type: "text", text }],
         authorBadges: [],
+        isMember: false,
         timestampMs: Date.now(),
         accentColor: "rgb(188, 188, 188)",
         priority: 0
@@ -277,7 +371,7 @@
           node = createMessageRow(message);
           node.style.transition = "none";
           node.style.opacity = "1";
-          node.style.transform = "translateX(0)";
+          node.style.transform = "translateX(0) scale(1)";
           state.messageNodes.set(messageId, node);
         }
 
@@ -328,7 +422,7 @@
           node = createMessageRow(message);
           node.style.transition = "none";
           node.style.opacity = "1";
-          node.style.transform = "translateX(0)";
+          node.style.transform = "translateX(0) scale(1)";
           state.messageNodes.set(messageId, node);
         }
 
@@ -404,7 +498,6 @@
       }
 
       if (isOverflowFadeMode()) {
-        // In overflow mode, message removal is driven only by maxVisible overflow.
         clearExpiredQueue();
         return;
       }
@@ -562,12 +655,13 @@
 
       const profile = getCurrentModeProfile();
       const fadeMs = profile.fadeMs;
-      const fadeShiftPx = Math.max(24, Math.round(profile.fontSizePx * 2));
-      const fadeShift =
-        profile.horizontalAlign === "right" ? fadeShiftPx : -fadeShiftPx;
-      node.style.transition = `opacity ${fadeMs}ms ease, transform ${fadeMs}ms ease`;
+      
+      // 斜め移動を避け、上方向へわずかに抜ける自然なフェードアウト
+      const fadeShiftY = -Math.max(8, Math.round(profile.fontSizePx * 0.35));
+
+      node.style.transition = `opacity ${fadeMs}ms cubic-bezier(0.4, 0, 1, 1), transform ${fadeMs}ms cubic-bezier(0.4, 0, 1, 1)`;
       node.style.opacity = "0";
-      node.style.transform = `translateX(${fadeShift}px)`;
+      node.style.transform = `translateY(${fadeShiftY}px) scale(0.98)`;
 
       window.setTimeout(() => {
         if (node.parentNode) {
@@ -581,6 +675,7 @@
       state.renderQueue.length = 0;
       state.removeQueue.length = 0;
       clearExpiredQueue();
+      resetFlowSurgeState();
 
       for (const messageId of state.messageNodes.keys()) {
         clearMessageTimer(messageId);

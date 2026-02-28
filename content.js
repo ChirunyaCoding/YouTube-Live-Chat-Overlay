@@ -26,6 +26,7 @@
    * @property {string} text
    * @property {OverlayMessageRun[]} messageRuns
    * @property {OverlayAuthorBadge[]} authorBadges
+   * @property {boolean} isMember
    * @property {number} timestampMs
    * @property {string} accentColor
    * @property {number} priority
@@ -55,12 +56,15 @@
    * @property {number} messageBgOpacity
    * @property {boolean} showAvatar
    * @property {boolean} showAuthorName
+   * @property {string} authorNameColorMember
+   * @property {string} authorNameColorNonMember
+   * @property {string} commentTextColor
    */
 
   /**
    * @typedef {Object} OverlayConfig
    * @property {{fullscreen: boolean, theater: boolean, normal: boolean}} enabledModes
-   * @property {{fontSizePx: boolean, anchorSettings: boolean}} sharedProfileFields
+   * @property {{fontSizePx: boolean, rowGapPx: boolean, laneWidthPercent: boolean, fontWeight: boolean, avatarSizePx: boolean, strokePx: boolean, textOpacity: boolean, messageBgOpacity: boolean, anchorSettings: boolean}} sharedProfileFields
    * @property {{fullscreen: OverlayModeProfile, theater: OverlayModeProfile, normal: OverlayModeProfile}} modeProfiles
    * @property {{open: {fullscreen: OverlayModeProfile, theater: OverlayModeProfile, normal: OverlayModeProfile}, closed: {fullscreen: OverlayModeProfile, theater: OverlayModeProfile, normal: OverlayModeProfile}}} panelModeProfiles
    * @property {number} maxVisible
@@ -85,6 +89,9 @@
    * @property {number} messageBgOpacity
    * @property {boolean} showAvatar
    * @property {boolean} showAuthorName
+   * @property {string} authorNameColorMember
+   * @property {string} authorNameColorNonMember
+   * @property {string} commentTextColor
    */
 
   const configApi =
@@ -147,6 +154,16 @@
       dragHandle: null,
       dragFrame: null,
       editButton: null,
+      settingsButton: null,
+      settingsWindow: null,
+      settingsWindowHeader: null,
+      settingsIframe: null,
+      settingsCloseButton: null,
+      settingsWindowVisible: false,
+      settingsWindowPosition: {
+        leftPx: null,
+        topPx: null
+      },
       controlsHost: null,
       blockHost: null
     },
@@ -187,7 +204,9 @@
       startOffsetYPx: 0
     },
     flushRaf: 0,
-    syncRaf: 0
+    syncRaf: 0,
+    storageSnapshot: "null",
+    storageSyncTimer: 0
   };
 
   let parserApi = null;
@@ -292,6 +311,14 @@
     return chrome.storage.local;
   }
 
+  function serializeStorageValue(value) {
+    try {
+      return JSON.stringify(typeof value === "undefined" ? null : value);
+    } catch (_error) {
+      return "null";
+    }
+  }
+
   function queueConfigSave(delayMs) {
     const storage = getStorageArea();
     if (!storage) {
@@ -322,10 +349,37 @@
 
     return new Promise((resolve) => {
       storage.get([STORAGE_KEY], (result) => {
-        state.config = normalizeConfig(result ? result[STORAGE_KEY] : null);
+        const rawConfig = result ? result[STORAGE_KEY] : null;
+        state.storageSnapshot = serializeStorageValue(rawConfig);
+        state.config = normalizeConfig(rawConfig);
         resolve();
       });
     });
+  }
+
+  function syncConfigFromStorageIfNeeded(forceApply) {
+    const storage = getStorageArea();
+    if (!storage) {
+      return;
+    }
+
+    try {
+      storage.get([STORAGE_KEY], (result) => {
+        if (chrome.runtime && chrome.runtime.lastError) {
+          return;
+        }
+        const rawConfig = result ? result[STORAGE_KEY] : null;
+        const nextSnapshot = serializeStorageValue(rawConfig);
+        if (!forceApply && nextSnapshot === state.storageSnapshot) {
+          return;
+        }
+        state.storageSnapshot = nextSnapshot;
+        state.config = normalizeConfig(rawConfig);
+        applyConfigChange();
+      });
+    } catch (e) {
+      // Extension context invalidated - ignore
+    }
   }
 
   function applyConfigChange() {
@@ -350,18 +404,35 @@
       return;
     }
 
-    chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== "local") {
-        return;
-      }
-      if (!Object.prototype.hasOwnProperty.call(changes, STORAGE_KEY)) {
-        return;
-      }
+    try {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName !== "local") {
+          return;
+        }
+        if (!Object.prototype.hasOwnProperty.call(changes, STORAGE_KEY)) {
+          return;
+        }
 
-      const change = changes[STORAGE_KEY];
-      state.config = normalizeConfig(change ? change.newValue : null);
-      applyConfigChange();
-    });
+        const change = changes[STORAGE_KEY];
+        state.storageSnapshot = serializeStorageValue(change ? change.newValue : null);
+        state.config = normalizeConfig(change ? change.newValue : null);
+        applyConfigChange();
+      });
+    } catch (e) {
+      // Extension context invalidated - ignore
+    }
+  }
+
+  function startStorageFallbackSync() {
+    const storage = getStorageArea();
+    if (!storage || state.storageSyncTimer) {
+      return;
+    }
+
+    // Fallback path for environments where onChanged events are delayed or missed.
+    state.storageSyncTimer = window.setInterval(() => {
+      syncConfigFromStorageIfNeeded(false);
+    }, 1200);
   }
 
   function isFullscreenActive() {
@@ -599,11 +670,28 @@
 
   function initialize() {
     watchStorageChanges();
+    startStorageFallbackSync();
 
     loadConfigFromStorage().finally(() => {
       document.addEventListener("fullscreenchange", scheduleSync, true);
       document.addEventListener("webkitfullscreenchange", scheduleSync, true);
+      document.addEventListener(
+        "visibilitychange",
+        () => {
+          if (document.visibilityState === "visible") {
+            syncConfigFromStorageIfNeeded(false);
+          }
+        },
+        true
+      );
       window.addEventListener("resize", scheduleSync, true);
+      window.addEventListener(
+        "focus",
+        () => {
+          syncConfigFromStorageIfNeeded(false);
+        },
+        true
+      );
       window.addEventListener("yt-page-data-updated", scheduleSync, true);
       window.addEventListener("yt-navigate-finish", handleNavigation, true);
 

@@ -1,13 +1,20 @@
 {
   "manifest_version": 3,
   "name": "YouTube Fullscreen Chat Overlay",
-  "version": "1.0.2",
+  "version": "1.2.0",
   "description": "Show YouTube live chat as an overlay while video is in fullscreen.",
   "permissions": ["storage"],
   "action": {
     "default_title": "Overlay Settings",
     "default_popup": "popup.html"
   },
+  "options_page": "popup.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html", "popup.css", "popup.js"],
+      "matches": ["https://www.youtube.com/*"]
+    }
+  ],
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*"],

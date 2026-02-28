@@ -476,6 +476,35 @@
       return badges;
     }
 
+    function resolveIsMemberAuthor(renderer, type, authorBadges) {
+      if (type === "membership") {
+        return true;
+      }
+
+      const authorNode = renderer.querySelector("#author-name");
+      if (authorNode) {
+        const typeAttr = (authorNode.getAttribute("type") || "").toLowerCase();
+        const className =
+          typeof authorNode.className === "string" ? authorNode.className.toLowerCase() : "";
+        if (
+          typeAttr.includes("member") ||
+          typeAttr.includes("sponsor") ||
+          className.includes("member") ||
+          className.includes("sponsor")
+        ) {
+          return true;
+        }
+      }
+
+      for (const badge of Array.isArray(authorBadges) ? authorBadges : []) {
+        const label = String((badge && badge.label) || "");
+        if (/member|sponsor|メンバー|メンバ/i.test(label)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     function resolveMessageRuns(renderer, type) {
       const runs = [];
 
@@ -705,6 +734,8 @@
       const text = rawText || label || "";
       const timestampToken = resolveTimestampToken(parseTarget, timestampMs);
       const id = buildMessageId(parseTarget, type, authorName, text, timestampToken);
+      const authorBadges = resolveAuthorBadges(parseTarget);
+      const isMember = resolveIsMemberAuthor(parseTarget, type, authorBadges);
 
       if (hasSeenId(id)) {
         return null;
@@ -719,7 +750,8 @@
         authorAvatarUrl: resolveAvatarUrl(parseTarget),
         text,
         messageRuns,
-        authorBadges: resolveAuthorBadges(parseTarget),
+        authorBadges,
+        isMember,
         timestampMs,
         accentColor: resolveAccentColor(parseTarget, type),
         priority: typeInfo[type] ? typeInfo[type].priority : 1

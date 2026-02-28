@@ -89,11 +89,21 @@
     textOpacity: 1,
     messageBgOpacity: 0.28,
     showAvatar: true,
-    showAuthorName: true
+    showAuthorName: true,
+    authorNameColorMember: "#4facfe",
+    authorNameColorNonMember: "#2bc963",
+    commentTextColor: "#ffffff"
   };
 
   const DEFAULT_SHARED_PROFILE_FIELDS = {
     fontSizePx: false,
+    rowGapPx: false,
+    laneWidthPercent: false,
+    fontWeight: false,
+    avatarSizePx: false,
+    strokePx: false,
+    textOpacity: true,
+    messageBgOpacity: true,
     anchorSettings: false
   };
 
@@ -154,7 +164,10 @@
     textOpacity: DEFAULT_MODE_PROFILE.textOpacity,
     messageBgOpacity: DEFAULT_MODE_PROFILE.messageBgOpacity,
     showAvatar: DEFAULT_MODE_PROFILE.showAvatar,
-    showAuthorName: DEFAULT_MODE_PROFILE.showAuthorName
+    showAuthorName: DEFAULT_MODE_PROFILE.showAuthorName,
+    authorNameColorMember: DEFAULT_MODE_PROFILE.authorNameColorMember,
+    authorNameColorNonMember: DEFAULT_MODE_PROFILE.authorNameColorNonMember,
+    commentTextColor: DEFAULT_MODE_PROFILE.commentTextColor
   };
 
   function clampNumber(value, min, max, fallback) {
@@ -169,6 +182,23 @@
       return max;
     }
     return numeric;
+  }
+
+  function normalizeColor(value, fallback) {
+    const raw = String(value || "").trim();
+    const matched = raw.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+    if (!matched) {
+      return fallback;
+    }
+    const hex = matched[1];
+    if (hex.length === 3) {
+      return `#${hex
+        .split("")
+        .map((chunk) => `${chunk}${chunk}`)
+        .join("")
+        .toLowerCase()}`;
+    }
+    return `#${hex.toLowerCase()}`;
   }
 
   function normalizeModeProfile(rawProfile, fallbackProfile) {
@@ -298,7 +328,22 @@
       showAuthorName:
         typeof input.showAuthorName === "boolean"
           ? input.showAuthorName
-          : fallback.showAuthorName
+          : fallback.showAuthorName,
+      authorNameColorMember: normalizeColor(
+        input.authorNameColorMember,
+        normalizeColor(fallback.authorNameColorMember, DEFAULT_MODE_PROFILE.authorNameColorMember)
+      ),
+      authorNameColorNonMember: normalizeColor(
+        input.authorNameColorNonMember,
+        normalizeColor(
+          fallback.authorNameColorNonMember,
+          DEFAULT_MODE_PROFILE.authorNameColorNonMember
+        )
+      ),
+      commentTextColor: normalizeColor(
+        input.commentTextColor,
+        normalizeColor(fallback.commentTextColor, DEFAULT_MODE_PROFILE.commentTextColor)
+      )
     };
   }
 
@@ -323,6 +368,34 @@
         typeof input.fontSizePx === "boolean"
           ? input.fontSizePx
           : DEFAULT_SHARED_PROFILE_FIELDS.fontSizePx,
+      rowGapPx:
+        typeof input.rowGapPx === "boolean"
+          ? input.rowGapPx
+          : DEFAULT_SHARED_PROFILE_FIELDS.rowGapPx,
+      laneWidthPercent:
+        typeof input.laneWidthPercent === "boolean"
+          ? input.laneWidthPercent
+          : DEFAULT_SHARED_PROFILE_FIELDS.laneWidthPercent,
+      fontWeight:
+        typeof input.fontWeight === "boolean"
+          ? input.fontWeight
+          : DEFAULT_SHARED_PROFILE_FIELDS.fontWeight,
+      avatarSizePx:
+        typeof input.avatarSizePx === "boolean"
+          ? input.avatarSizePx
+          : DEFAULT_SHARED_PROFILE_FIELDS.avatarSizePx,
+      strokePx:
+        typeof input.strokePx === "boolean"
+          ? input.strokePx
+          : DEFAULT_SHARED_PROFILE_FIELDS.strokePx,
+      textOpacity:
+        typeof input.textOpacity === "boolean"
+          ? input.textOpacity
+          : DEFAULT_SHARED_PROFILE_FIELDS.textOpacity,
+      messageBgOpacity:
+        typeof input.messageBgOpacity === "boolean"
+          ? input.messageBgOpacity
+          : DEFAULT_SHARED_PROFILE_FIELDS.messageBgOpacity,
       anchorSettings:
         typeof input.anchorSettings === "boolean"
           ? input.anchorSettings
@@ -398,17 +471,17 @@
       }
     }
 
-    const sharedTextOpacity = clampNumber(
-      input.textOpacity,
-      0.1,
-      1,
-      panelModeProfiles.closed.fullscreen.textOpacity
+    const sharedAuthorNameColorMember = normalizeColor(
+      input.authorNameColorMember,
+      panelModeProfiles.closed.fullscreen.authorNameColorMember
     );
-    const sharedMessageBgOpacity = clampNumber(
-      input.messageBgOpacity,
-      0,
-      0.9,
-      panelModeProfiles.closed.fullscreen.messageBgOpacity
+    const sharedAuthorNameColorNonMember = normalizeColor(
+      input.authorNameColorNonMember,
+      panelModeProfiles.closed.fullscreen.authorNameColorNonMember
+    );
+    const sharedCommentTextColor = normalizeColor(
+      input.commentTextColor,
+      panelModeProfiles.closed.fullscreen.commentTextColor
     );
     const sharedFadeOutTrigger =
       input.fadeOutTrigger === "overflow"
@@ -418,8 +491,11 @@
           : panelModeProfiles.closed.fullscreen.fadeOutTrigger;
     for (const panelState of PANEL_STATE_KEYS) {
       for (const mode of MODE_KEYS) {
-        panelModeProfiles[panelState][mode].textOpacity = sharedTextOpacity;
-        panelModeProfiles[panelState][mode].messageBgOpacity = sharedMessageBgOpacity;
+        panelModeProfiles[panelState][mode].authorNameColorMember =
+          sharedAuthorNameColorMember;
+        panelModeProfiles[panelState][mode].authorNameColorNonMember =
+          sharedAuthorNameColorNonMember;
+        panelModeProfiles[panelState][mode].commentTextColor = sharedCommentTextColor;
         panelModeProfiles[panelState][mode].fadeOutTrigger = sharedFadeOutTrigger;
       }
     }
@@ -429,6 +505,79 @@
       for (const panelState of PANEL_STATE_KEYS) {
         for (const mode of MODE_KEYS) {
           panelModeProfiles[panelState][mode].fontSizePx = sharedFontSize;
+        }
+      }
+    }
+
+    if (sharedProfileFields.rowGapPx) {
+      const sharedRowGap = panelModeProfiles.closed.fullscreen.rowGapPx;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].rowGapPx = sharedRowGap;
+        }
+      }
+    }
+
+    if (sharedProfileFields.laneWidthPercent) {
+      const sharedLaneWidthPercent = panelModeProfiles.closed.fullscreen.laneWidthPercent;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].laneWidthPercent = sharedLaneWidthPercent;
+        }
+      }
+    }
+
+    if (sharedProfileFields.fontWeight) {
+      const sharedFontWeight = panelModeProfiles.closed.fullscreen.fontWeight;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].fontWeight = sharedFontWeight;
+        }
+      }
+    }
+
+    if (sharedProfileFields.avatarSizePx) {
+      const sharedAvatarSizePx = panelModeProfiles.closed.fullscreen.avatarSizePx;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].avatarSizePx = sharedAvatarSizePx;
+        }
+      }
+    }
+
+    if (sharedProfileFields.strokePx) {
+      const sharedStrokePx = panelModeProfiles.closed.fullscreen.strokePx;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].strokePx = sharedStrokePx;
+        }
+      }
+    }
+
+    if (sharedProfileFields.textOpacity) {
+      const sharedTextOpacity = clampNumber(
+        input.textOpacity,
+        0.1,
+        1,
+        panelModeProfiles.closed.fullscreen.textOpacity
+      );
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].textOpacity = sharedTextOpacity;
+        }
+      }
+    }
+
+    if (sharedProfileFields.messageBgOpacity) {
+      const sharedMessageBgOpacity = clampNumber(
+        input.messageBgOpacity,
+        0,
+        0.9,
+        panelModeProfiles.closed.fullscreen.messageBgOpacity
+      );
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].messageBgOpacity = sharedMessageBgOpacity;
         }
       }
     }
@@ -486,7 +635,10 @@
       textOpacity: panelModeProfiles.closed.fullscreen.textOpacity,
       messageBgOpacity: panelModeProfiles.closed.fullscreen.messageBgOpacity,
       showAvatar: panelModeProfiles.closed.fullscreen.showAvatar,
-      showAuthorName: panelModeProfiles.closed.fullscreen.showAuthorName
+      showAuthorName: panelModeProfiles.closed.fullscreen.showAuthorName,
+      authorNameColorMember: panelModeProfiles.closed.fullscreen.authorNameColorMember,
+      authorNameColorNonMember: panelModeProfiles.closed.fullscreen.authorNameColorNonMember,
+      commentTextColor: panelModeProfiles.closed.fullscreen.commentTextColor
     };
   }
 
