@@ -9,6 +9,7 @@
 
   const DEFAULT_MODE_PROFILE = {
     maxVisible: 8,
+    fadeOutTrigger: "timer",
     ttlMs: 9000,
     fadeMs: 300,
     sequentialFadeSec: 0.3,
@@ -19,6 +20,15 @@
     rowGapPx: 10,
     horizontalAlign: "left",
     verticalAlign: "bottom",
+    identityAlign: "left",
+    offsetsByAnchorX: {
+      left: 12,
+      right: 12
+    },
+    offsetsByAnchorY: {
+      top: 24,
+      bottom: 24
+    },
     offsetXPx: 12,
     offsetYPx: 24,
     strokePx: 1.6,
@@ -28,11 +38,24 @@
     showAuthorName: true
   };
 
+  const DEFAULT_SHARED_PROFILE_FIELDS = {
+    fontSizePx: false,
+    anchorSettings: false
+  };
+
+  function cloneModeProfile(profile) {
+    return {
+      ...profile,
+      offsetsByAnchorX: { ...(profile.offsetsByAnchorX || DEFAULT_MODE_PROFILE.offsetsByAnchorX) },
+      offsetsByAnchorY: { ...(profile.offsetsByAnchorY || DEFAULT_MODE_PROFILE.offsetsByAnchorY) }
+    };
+  }
+
   function createModeProfiles(profile) {
     return {
-      fullscreen: { ...profile },
-      theater: { ...profile },
-      normal: { ...profile }
+      fullscreen: cloneModeProfile(profile),
+      theater: cloneModeProfile(profile),
+      normal: cloneModeProfile(profile)
     };
   }
 
@@ -49,6 +72,7 @@
       theater: true,
       normal: true
     },
+    sharedProfileFields: { ...DEFAULT_SHARED_PROFILE_FIELDS },
     modeProfiles: createModeProfiles(DEFAULT_MODE_PROFILE),
     panelModeProfiles: createPanelModeProfiles(DEFAULT_MODE_PROFILE)
   };
@@ -101,6 +125,10 @@
   };
 
   const PROFILE_SELECT_FIELDS = {
+    fadeOutTrigger: {
+      values: ["timer", "overflow"],
+      fallback: DEFAULT_MODE_PROFILE.fadeOutTrigger
+    },
     horizontalAlign: {
       values: ["left", "right"],
       fallback: DEFAULT_MODE_PROFILE.horizontalAlign
@@ -108,14 +136,25 @@
     verticalAlign: {
       values: ["bottom", "top"],
       fallback: DEFAULT_MODE_PROFILE.verticalAlign
+    },
+    identityAlign: {
+      values: ["left", "right"],
+      fallback: DEFAULT_MODE_PROFILE.identityAlign
     }
   };
 
   const MODE_CHECKBOX_IDS = ["modeFullscreen", "modeTheater", "modeNormal"];
+  const SHARED_PROFILE_TOGGLE_IDS = ["shareFontSize", "shareAnchorSettings"];
+  const SHARED_PROFILE_TOGGLE_TO_KEY = {
+    shareFontSize: "fontSizePx",
+    shareAnchorSettings: "anchorSettings"
+  };
   const PROFILE_CHECKBOX_IDS = ["showAvatar", "showAuthorName"];
   const PROFILE_NUMERIC_IDS = Object.keys(NUMERIC_FIELDS);
   const PROFILE_SELECT_IDS = Object.keys(PROFILE_SELECT_FIELDS);
   const SHARED_OPACITY_IDS = ["textOpacity", "messageBgOpacity"];
+  const SHARED_ANCHOR_FIELD_IDS = ["horizontalAlign", "verticalAlign", "identityAlign"];
+  const SHARED_BEHAVIOR_SELECT_IDS = ["fadeOutTrigger"];
 
   const form = document.getElementById("settings-form");
   const resetButton = document.getElementById("resetButton");
@@ -161,17 +200,131 @@
     )
       ? input.horizontalAlign
       : fallback.horizontalAlign;
+    const fadeOutTrigger = PROFILE_SELECT_FIELDS.fadeOutTrigger.values.includes(
+      input.fadeOutTrigger
+    )
+      ? input.fadeOutTrigger
+      : fallback.fadeOutTrigger;
 
     const verticalAlign = PROFILE_SELECT_FIELDS.verticalAlign.values.includes(
       input.verticalAlign
     )
       ? input.verticalAlign
       : fallback.verticalAlign;
+    const identityAlign = PROFILE_SELECT_FIELDS.identityAlign.values.includes(
+      input.identityAlign
+    )
+      ? input.identityAlign
+      : fallback.identityAlign;
 
     const offsetXInput =
       typeof input.offsetXPx !== "undefined" ? input.offsetXPx : input.leftOffsetPx;
     const offsetYInput =
       typeof input.offsetYPx !== "undefined" ? input.offsetYPx : input.bottomOffsetPx;
+
+    const fallbackOffsetX = clampNumber(
+      fallback.offsetXPx,
+      NUMERIC_FIELDS.offsetXPx.min,
+      NUMERIC_FIELDS.offsetXPx.max,
+      DEFAULT_MODE_PROFILE.offsetXPx,
+      NUMERIC_FIELDS.offsetXPx.step
+    );
+    const fallbackOffsetY = clampNumber(
+      fallback.offsetYPx,
+      NUMERIC_FIELDS.offsetYPx.min,
+      NUMERIC_FIELDS.offsetYPx.max,
+      DEFAULT_MODE_PROFILE.offsetYPx,
+      NUMERIC_FIELDS.offsetYPx.step
+    );
+    const fallbackOffsetsByAnchorXInput =
+      fallback.offsetsByAnchorX && typeof fallback.offsetsByAnchorX === "object"
+        ? fallback.offsetsByAnchorX
+        : {};
+    const fallbackOffsetsByAnchorYInput =
+      fallback.offsetsByAnchorY && typeof fallback.offsetsByAnchorY === "object"
+        ? fallback.offsetsByAnchorY
+        : {};
+    const fallbackOffsetsByAnchorX = {
+      left: clampNumber(
+        fallbackOffsetsByAnchorXInput.left,
+        NUMERIC_FIELDS.offsetXPx.min,
+        NUMERIC_FIELDS.offsetXPx.max,
+        fallbackOffsetX,
+        NUMERIC_FIELDS.offsetXPx.step
+      ),
+      right: clampNumber(
+        fallbackOffsetsByAnchorXInput.right,
+        NUMERIC_FIELDS.offsetXPx.min,
+        NUMERIC_FIELDS.offsetXPx.max,
+        fallbackOffsetX,
+        NUMERIC_FIELDS.offsetXPx.step
+      )
+    };
+    const fallbackOffsetsByAnchorY = {
+      top: clampNumber(
+        fallbackOffsetsByAnchorYInput.top,
+        NUMERIC_FIELDS.offsetYPx.min,
+        NUMERIC_FIELDS.offsetYPx.max,
+        fallbackOffsetY,
+        NUMERIC_FIELDS.offsetYPx.step
+      ),
+      bottom: clampNumber(
+        fallbackOffsetsByAnchorYInput.bottom,
+        NUMERIC_FIELDS.offsetYPx.min,
+        NUMERIC_FIELDS.offsetYPx.max,
+        fallbackOffsetY,
+        NUMERIC_FIELDS.offsetYPx.step
+      )
+    };
+
+    const inputOffsetsByAnchorX =
+      input.offsetsByAnchorX && typeof input.offsetsByAnchorX === "object"
+        ? input.offsetsByAnchorX
+        : {};
+    const inputOffsetsByAnchorY =
+      input.offsetsByAnchorY && typeof input.offsetsByAnchorY === "object"
+        ? input.offsetsByAnchorY
+        : {};
+    const legacyOffsetXFallback =
+      typeof offsetXInput !== "undefined" ? offsetXInput : fallbackOffsetsByAnchorX.left;
+    const legacyOffsetYFallback =
+      typeof offsetYInput !== "undefined" ? offsetYInput : fallbackOffsetsByAnchorY.bottom;
+    const offsetsByAnchorX = {
+      left: clampNumber(
+        inputOffsetsByAnchorX.left,
+        NUMERIC_FIELDS.offsetXPx.min,
+        NUMERIC_FIELDS.offsetXPx.max,
+        legacyOffsetXFallback,
+        NUMERIC_FIELDS.offsetXPx.step
+      ),
+      right: clampNumber(
+        inputOffsetsByAnchorX.right,
+        NUMERIC_FIELDS.offsetXPx.min,
+        NUMERIC_FIELDS.offsetXPx.max,
+        legacyOffsetXFallback,
+        NUMERIC_FIELDS.offsetXPx.step
+      )
+    };
+    const offsetsByAnchorY = {
+      top: clampNumber(
+        inputOffsetsByAnchorY.top,
+        NUMERIC_FIELDS.offsetYPx.min,
+        NUMERIC_FIELDS.offsetYPx.max,
+        legacyOffsetYFallback,
+        NUMERIC_FIELDS.offsetYPx.step
+      ),
+      bottom: clampNumber(
+        inputOffsetsByAnchorY.bottom,
+        NUMERIC_FIELDS.offsetYPx.min,
+        NUMERIC_FIELDS.offsetYPx.max,
+        legacyOffsetYFallback,
+        NUMERIC_FIELDS.offsetYPx.step
+      )
+    };
+    const activeOffsetXPx =
+      horizontalAlign === "right" ? offsetsByAnchorX.right : offsetsByAnchorX.left;
+    const activeOffsetYPx =
+      verticalAlign === "top" ? offsetsByAnchorY.top : offsetsByAnchorY.bottom;
 
     return {
       maxVisible: clampNumber(
@@ -181,6 +334,7 @@
         fallback.maxVisible,
         NUMERIC_FIELDS.maxVisible.step
       ),
+      fadeOutTrigger,
       ttlMs: clampNumber(
         input.ttlMs,
         NUMERIC_FIELDS.ttlMs.min,
@@ -239,20 +393,11 @@
       ),
       horizontalAlign,
       verticalAlign,
-      offsetXPx: clampNumber(
-        offsetXInput,
-        NUMERIC_FIELDS.offsetXPx.min,
-        NUMERIC_FIELDS.offsetXPx.max,
-        fallback.offsetXPx,
-        NUMERIC_FIELDS.offsetXPx.step
-      ),
-      offsetYPx: clampNumber(
-        offsetYInput,
-        NUMERIC_FIELDS.offsetYPx.min,
-        NUMERIC_FIELDS.offsetYPx.max,
-        fallback.offsetYPx,
-        NUMERIC_FIELDS.offsetYPx.step
-      ),
+      identityAlign,
+      offsetsByAnchorX,
+      offsetsByAnchorY,
+      offsetXPx: activeOffsetXPx,
+      offsetYPx: activeOffsetYPx,
       strokePx: clampNumber(
         input.strokePx,
         NUMERIC_FIELDS.strokePx.min,
@@ -297,6 +442,34 @@
     );
   }
 
+  function normalizeSharedProfileFields(raw) {
+    const input = raw && typeof raw === "object" ? raw : {};
+    return {
+      fontSizePx:
+        typeof input.fontSizePx === "boolean"
+          ? input.fontSizePx
+          : DEFAULT_SHARED_PROFILE_FIELDS.fontSizePx,
+      anchorSettings:
+        typeof input.anchorSettings === "boolean"
+          ? input.anchorSettings
+          : DEFAULT_SHARED_PROFILE_FIELDS.anchorSettings
+    };
+  }
+
+  function syncProfileActiveOffsets(profile) {
+    if (!profile || typeof profile !== "object") {
+      return;
+    }
+    profile.offsetXPx =
+      profile.horizontalAlign === "right"
+        ? profile.offsetsByAnchorX.right
+        : profile.offsetsByAnchorX.left;
+    profile.offsetYPx =
+      profile.verticalAlign === "top"
+        ? profile.offsetsByAnchorY.top
+        : profile.offsetsByAnchorY.bottom;
+  }
+
   function normalizeSettings(raw) {
     const input = raw && typeof raw === "object" ? raw : {};
     const modeInput =
@@ -311,10 +484,15 @@
       input.panelModeProfiles && typeof input.panelModeProfiles === "object"
         ? input.panelModeProfiles
         : {};
+    const sharedProfileFieldsInput =
+      input.sharedProfileFields && typeof input.sharedProfileFields === "object"
+        ? input.sharedProfileFields
+        : {};
     const modeSizeScaleInput =
       input.modeSizeScale && typeof input.modeSizeScale === "object"
         ? input.modeSizeScale
         : {};
+    const sharedProfileFields = normalizeSharedProfileFields(sharedProfileFieldsInput);
 
     const legacyBaseProfile = normalizeModeProfile(input, DEFAULT_MODE_PROFILE);
     const legacyScale = {
@@ -358,10 +536,39 @@
       panelModeProfiles.closed.fullscreen.messageBgOpacity,
       NUMERIC_FIELDS.messageBgOpacity.step
     );
+    const sharedFadeOutTrigger = PROFILE_SELECT_FIELDS.fadeOutTrigger.values.includes(
+      input.fadeOutTrigger
+    )
+      ? input.fadeOutTrigger
+      : panelModeProfiles.closed.fullscreen.fadeOutTrigger;
     for (const panelState of PANEL_STATE_KEYS) {
       for (const mode of MODE_KEYS) {
         panelModeProfiles[panelState][mode].textOpacity = sharedTextOpacity;
         panelModeProfiles[panelState][mode].messageBgOpacity = sharedMessageBgOpacity;
+        panelModeProfiles[panelState][mode].fadeOutTrigger = sharedFadeOutTrigger;
+      }
+    }
+
+    if (sharedProfileFields.fontSizePx) {
+      const sharedFontSize = panelModeProfiles.closed.fullscreen.fontSizePx;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].fontSizePx = sharedFontSize;
+        }
+      }
+    }
+
+    if (sharedProfileFields.anchorSettings) {
+      const sharedHorizontalAlign = panelModeProfiles.closed.fullscreen.horizontalAlign;
+      const sharedVerticalAlign = panelModeProfiles.closed.fullscreen.verticalAlign;
+      const sharedIdentityAlign = panelModeProfiles.closed.fullscreen.identityAlign;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].horizontalAlign = sharedHorizontalAlign;
+          panelModeProfiles[panelState][mode].verticalAlign = sharedVerticalAlign;
+          panelModeProfiles[panelState][mode].identityAlign = sharedIdentityAlign;
+          syncProfileActiveOffsets(panelModeProfiles[panelState][mode]);
+        }
       }
     }
 
@@ -380,6 +587,7 @@
             ? modeInput.normal
             : DEFAULT_SETTINGS.enabledModes.normal
       },
+      sharedProfileFields,
       modeProfiles: panelModeProfiles.closed,
       panelModeProfiles
     };
@@ -441,7 +649,10 @@
     const panelProfiles =
       currentSettings.panelModeProfiles && currentSettings.panelModeProfiles[selectedPanelState];
     if (panelProfiles && panelProfiles[selectedMode]) {
-      return panelProfiles[selectedMode];
+      const profile = panelProfiles[selectedMode];
+      const normalizedProfile = normalizeModeProfile(profile, DEFAULT_MODE_PROFILE);
+      panelProfiles[selectedMode] = normalizedProfile;
+      return normalizedProfile;
     }
     return DEFAULT_MODE_PROFILE;
   }
@@ -466,7 +677,21 @@
     for (const id of PROFILE_NUMERIC_IDS) {
       const node = document.getElementById(id);
       if (node) {
-        node.value = String(targetProfile[id]);
+        if (id === "offsetXPx") {
+          node.value = String(
+            targetProfile.horizontalAlign === "right"
+              ? targetProfile.offsetsByAnchorX.right
+              : targetProfile.offsetsByAnchorX.left
+          );
+        } else if (id === "offsetYPx") {
+          node.value = String(
+            targetProfile.verticalAlign === "top"
+              ? targetProfile.offsetsByAnchorY.top
+              : targetProfile.offsetsByAnchorY.bottom
+          );
+        } else {
+          node.value = String(targetProfile[id]);
+        }
       }
     }
   }
@@ -484,6 +709,18 @@
     }
     if (modeNormal) {
       modeNormal.checked = Boolean(currentSettings.enabledModes.normal);
+    }
+
+    const sharedProfileFields = normalizeSharedProfileFields(
+      currentSettings.sharedProfileFields
+    );
+    currentSettings.sharedProfileFields = sharedProfileFields;
+    for (const id of SHARED_PROFILE_TOGGLE_IDS) {
+      const node = document.getElementById(id);
+      const key = SHARED_PROFILE_TOGGLE_TO_KEY[id];
+      if (node && key) {
+        node.checked = Boolean(sharedProfileFields[key]);
+      }
     }
 
     if (profileModeNode) {
@@ -541,6 +778,47 @@
     }
   }
 
+  function updateSharedSelectField(id, value) {
+    for (const panelState of PANEL_STATE_KEYS) {
+      for (const mode of MODE_KEYS) {
+        currentSettings.panelModeProfiles[panelState][mode][id] = value;
+      }
+    }
+  }
+
+  function updateFieldAcrossProfiles(id, value) {
+    for (const panelState of PANEL_STATE_KEYS) {
+      for (const mode of MODE_KEYS) {
+        currentSettings.panelModeProfiles[panelState][mode][id] = value;
+        if (id === "horizontalAlign" || id === "verticalAlign") {
+          syncProfileActiveOffsets(currentSettings.panelModeProfiles[panelState][mode]);
+        }
+      }
+    }
+  }
+
+  function applySharedFieldsFromCurrentProfile(sharedKey) {
+    const profile = getCurrentProfile();
+    if (sharedKey === "fontSizePx") {
+      updateFieldAcrossProfiles("fontSizePx", profile.fontSizePx);
+      return;
+    }
+
+    if (sharedKey === "anchorSettings") {
+      updateFieldAcrossProfiles("horizontalAlign", profile.horizontalAlign);
+      updateFieldAcrossProfiles("verticalAlign", profile.verticalAlign);
+      updateFieldAcrossProfiles("identityAlign", profile.identityAlign);
+    }
+  }
+
+  function isSharedFieldEnabled(sharedKey) {
+    const sharedProfileFields = normalizeSharedProfileFields(
+      currentSettings.sharedProfileFields
+    );
+    currentSettings.sharedProfileFields = sharedProfileFields;
+    return Boolean(sharedProfileFields[sharedKey]);
+  }
+
   function handleControlChange(event) {
     const target = event.target;
     if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLSelectElement)) {
@@ -586,6 +864,23 @@
       return;
     }
 
+    if (SHARED_PROFILE_TOGGLE_IDS.includes(id) && target instanceof HTMLInputElement) {
+      const sharedKey = SHARED_PROFILE_TOGGLE_TO_KEY[id];
+      if (sharedKey) {
+        const sharedProfileFields = normalizeSharedProfileFields(
+          currentSettings.sharedProfileFields
+        );
+        sharedProfileFields[sharedKey] = target.checked;
+        currentSettings.sharedProfileFields = sharedProfileFields;
+        if (target.checked) {
+          applySharedFieldsFromCurrentProfile(sharedKey);
+          setProfileFields(getCurrentProfile());
+        }
+        queueSave();
+      }
+      return;
+    }
+
     if (PROFILE_CHECKBOX_IDS.includes(id) && target instanceof HTMLInputElement) {
       updateCurrentProfileField(id, target.checked);
       queueSave();
@@ -596,7 +891,14 @@
       const meta = PROFILE_SELECT_FIELDS[id];
       const value = meta.values.includes(target.value) ? target.value : meta.fallback;
       target.value = value;
-      updateCurrentProfileField(id, value);
+      if (SHARED_BEHAVIOR_SELECT_IDS.includes(id)) {
+        updateSharedSelectField(id, value);
+      } else if (isSharedFieldEnabled("anchorSettings") && SHARED_ANCHOR_FIELD_IDS.includes(id)) {
+        updateFieldAcrossProfiles(id, value);
+      } else {
+        updateCurrentProfileField(id, value);
+      }
+      setProfileFields(getCurrentProfile());
       queueSave();
       return;
     }
@@ -614,6 +916,18 @@
       target.value = String(clamped);
       if (SHARED_OPACITY_IDS.includes(id)) {
         updateSharedOpacityField(id, clamped);
+      } else if (id === "fontSizePx" && isSharedFieldEnabled("fontSizePx")) {
+        updateFieldAcrossProfiles(id, clamped);
+      } else if (id === "offsetXPx") {
+        const profile = getCurrentProfile();
+        const side = profile.horizontalAlign === "right" ? "right" : "left";
+        profile.offsetsByAnchorX[side] = clamped;
+        profile.offsetXPx = clamped;
+      } else if (id === "offsetYPx") {
+        const profile = getCurrentProfile();
+        const side = profile.verticalAlign === "top" ? "top" : "bottom";
+        profile.offsetsByAnchorY[side] = clamped;
+        profile.offsetYPx = clamped;
       } else {
         updateCurrentProfileField(id, clamped);
       }
@@ -667,3 +981,29 @@
   bindEvents();
   loadInitialSettings();
 })();
+
+// ==========================================
+// タブ切り替え処理 (UI制御用)
+// ==========================================
+document.addEventListener("DOMContentLoaded", () => {
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  const tabPanes = document.querySelectorAll(".tab-pane");
+
+  if (!tabBtns.length || !tabPanes.length) return;
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      // 全タブを非アクティブ化
+      tabBtns.forEach(b => b.classList.remove("active"));
+      tabPanes.forEach(p => p.classList.remove("active"));
+      
+      // クリックされたタブをアクティブ化
+      btn.classList.add("active");
+      const targetId = btn.getAttribute("data-tab");
+      const targetPane = document.getElementById(targetId);
+      if (targetPane) {
+        targetPane.classList.add("active");
+      }
+    });
+  });
+});

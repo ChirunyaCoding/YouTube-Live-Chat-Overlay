@@ -97,6 +97,62 @@
       return Math.max(0, Math.round(scaled));
     }
 
+    function getProfileOffsetXPx(profile) {
+      const side = profile.horizontalAlign === "right" ? "right" : "left";
+      const fallback = Math.round(clampNumber(profile.offsetXPx, 0, offsetMaxXBase, 0));
+      const map =
+        profile.offsetsByAnchorX && typeof profile.offsetsByAnchorX === "object"
+          ? profile.offsetsByAnchorX
+          : {};
+      return Math.round(clampNumber(map[side], 0, offsetMaxXBase, fallback));
+    }
+
+    function getProfileOffsetYPx(profile) {
+      const side = profile.verticalAlign === "top" ? "top" : "bottom";
+      const fallback = Math.round(clampNumber(profile.offsetYPx, 0, offsetMaxYBase, 0));
+      const map =
+        profile.offsetsByAnchorY && typeof profile.offsetsByAnchorY === "object"
+          ? profile.offsetsByAnchorY
+          : {};
+      return Math.round(clampNumber(map[side], 0, offsetMaxYBase, fallback));
+    }
+
+    function setProfileOffsetXPx(profile, value) {
+      const side = profile.horizontalAlign === "right" ? "right" : "left";
+      const next = Math.round(clampNumber(value, 0, offsetMaxXBase, 0));
+      const map =
+        profile.offsetsByAnchorX && typeof profile.offsetsByAnchorX === "object"
+          ? profile.offsetsByAnchorX
+          : {};
+      map[side] = next;
+      if (typeof map.left !== "number") {
+        map.left = next;
+      }
+      if (typeof map.right !== "number") {
+        map.right = next;
+      }
+      profile.offsetsByAnchorX = map;
+      profile.offsetXPx = next;
+    }
+
+    function setProfileOffsetYPx(profile, value) {
+      const side = profile.verticalAlign === "top" ? "top" : "bottom";
+      const next = Math.round(clampNumber(value, 0, offsetMaxYBase, 0));
+      const map =
+        profile.offsetsByAnchorY && typeof profile.offsetsByAnchorY === "object"
+          ? profile.offsetsByAnchorY
+          : {};
+      map[side] = next;
+      if (typeof map.top !== "number") {
+        map.top = next;
+      }
+      if (typeof map.bottom !== "number") {
+        map.bottom = next;
+      }
+      profile.offsetsByAnchorY = map;
+      profile.offsetYPx = next;
+    }
+
     function getDragGuideSize(profile) {
       const host = state.overlayUI.host;
       const lane = state.overlayUI.lane;
@@ -161,13 +217,11 @@
     function getProfileOffsetBounds(profile) {
       const size = getDragGuideSize(profile);
       if (!size) {
+        const currentOffsetX = getProfileOffsetXPx(profile);
+        const currentOffsetY = getProfileOffsetYPx(profile);
         return {
-          offsetXBase: Math.round(
-            clampNumber(profile.offsetXPx, 0, offsetMaxXBase, profile.offsetXPx)
-          ),
-          offsetYBase: Math.round(
-            clampNumber(profile.offsetYPx, 0, offsetMaxYBase, profile.offsetYPx)
-          ),
+          offsetXBase: Math.round(clampNumber(currentOffsetX, 0, offsetMaxXBase, currentOffsetX)),
+          offsetYBase: Math.round(clampNumber(currentOffsetY, 0, offsetMaxYBase, currentOffsetY)),
           maxXBase: offsetMaxXBase,
           maxYBase: offsetMaxYBase,
           size: null
@@ -178,8 +232,8 @@
       const maxYBase = toBaseOffsetLimit(size.hostRect.height, size.height, 1080, offsetMaxYBase);
 
       return {
-        offsetXBase: Math.round(clampNumber(profile.offsetXPx, 0, maxXBase, profile.offsetXPx)),
-        offsetYBase: Math.round(clampNumber(profile.offsetYPx, 0, maxYBase, profile.offsetYPx)),
+        offsetXBase: Math.round(clampNumber(getProfileOffsetXPx(profile), 0, maxXBase, 0)),
+        offsetYBase: Math.round(clampNumber(getProfileOffsetYPx(profile), 0, maxYBase, 0)),
         maxXBase,
         maxYBase,
         size
@@ -366,8 +420,8 @@
       state.dragState.panelState = panelState;
       state.dragState.startClientX = event.clientX;
       state.dragState.startClientY = event.clientY;
-      state.dragState.startOffsetXPx = profile.offsetXPx;
-      state.dragState.startOffsetYPx = profile.offsetYPx;
+      state.dragState.startOffsetXPx = getProfileOffsetXPx(profile);
+      state.dragState.startOffsetYPx = getProfileOffsetYPx(profile);
 
       const handle = state.overlayUI.dragHandle;
       if (handle) {
@@ -422,12 +476,8 @@
         (profile.verticalAlign === "top" ? baseDeltaY : -baseDeltaY);
 
       const bounds = getProfileOffsetBounds(profile);
-      profile.offsetXPx = Math.round(
-        clampNumber(nextOffsetX, 0, bounds.maxXBase, bounds.offsetXBase)
-      );
-      profile.offsetYPx = Math.round(
-        clampNumber(nextOffsetY, 0, bounds.maxYBase, bounds.offsetYBase)
-      );
+      setProfileOffsetXPx(profile, clampNumber(nextOffsetX, 0, bounds.maxXBase, bounds.offsetXBase));
+      setProfileOffsetYPx(profile, clampNumber(nextOffsetY, 0, bounds.maxYBase, bounds.offsetYBase));
 
       applyOverlayLayoutStyles();
       queueConfigSave(80);
@@ -479,6 +529,7 @@
       }
       lane.style.width = `${profile.laneWidthPercent}%`;
       lane.style.maxWidth = "96%";
+      lane.style.alignItems = profile.horizontalAlign === "right" ? "flex-end" : "flex-start";
       lane.style.gap = `${Math.max(0, Math.round(profile.rowGapPx))}px`;
       syncDragOverlayLayout();
     }

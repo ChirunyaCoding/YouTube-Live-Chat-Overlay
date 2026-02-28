@@ -243,6 +243,15 @@
 
       const renderers = [];
       for (const mutation of mutations) {
+        const target = mutation && mutation.target;
+        if (target instanceof Element) {
+          const targetRenderer =
+            target.matches(rendererSelector) ? target : target.closest(rendererSelector);
+          if (targetRenderer) {
+            parser.collectRendererElements(targetRenderer, renderers);
+          }
+        }
+
         for (const node of mutation.addedNodes) {
           parser.collectRendererElements(node, renderers);
         }

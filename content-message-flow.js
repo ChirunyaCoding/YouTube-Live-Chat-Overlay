@@ -14,6 +14,7 @@
         ? deps.getCurrentModeProfile
         : () => ({
             maxVisible: 8,
+            fadeOutTrigger: "timer",
             ttlMs: 9000,
             fadeMs: 300,
             sequentialFadeSec: 0.3,
@@ -27,6 +28,57 @@
       deps && typeof deps.syncDragOverlayLayout === "function"
         ? deps.syncDragOverlayLayout
         : () => {};
+
+    function isOverflowFadeMode(profile) {
+      const source = profile && typeof profile === "object" ? profile : getCurrentModeProfile();
+      return source && source.fadeOutTrigger === "overflow";
+    }
+
+    function clearExpiredQueue() {
+      state.expiredMessageIds = [];
+      state.expiredMessageIdSet.clear();
+      if (state.expireDrainTimer) {
+        window.clearTimeout(state.expireDrainTimer);
+        state.expireDrainTimer = 0;
+      }
+    }
+
+    function scheduleMessageTimer(messageId) {
+      if (!messageId) {
+        return;
+      }
+      if (isOverflowFadeMode()) {
+        clearMessageTimer(messageId);
+        return;
+      }
+      clearMessageTimer(messageId);
+      const ttlMs = Math.max(1000, Math.round(getCurrentModeProfile().ttlMs));
+      const timer = window.setTimeout(() => {
+        enqueueExpiredMessage(messageId);
+      }, ttlMs);
+      state.activeTimers.set(messageId, timer);
+    }
+
+    function syncFadeOutModeForVisibleMessages() {
+      const profile = getCurrentModeProfile();
+      if (isOverflowFadeMode(profile)) {
+        for (const messageId of state.messageOrder) {
+          clearMessageTimer(messageId);
+        }
+        clearExpiredQueue();
+        return;
+      }
+
+      for (const messageId of state.messageOrder) {
+        if (!state.messageNodes.has(messageId)) {
+          continue;
+        }
+        if (state.activeTimers.has(messageId)) {
+          continue;
+        }
+        scheduleMessageTimer(messageId);
+      }
+    }
 
     function markSeenId(id) {
       state.seenMessageIds.add(id);
@@ -231,11 +283,7 @@
 
         lane.appendChild(node);
         nextOrder.push(messageId);
-        clearMessageTimer(messageId);
-        const timer = window.setTimeout(() => {
-          enqueueExpiredMessage(messageId);
-        }, getCurrentModeProfile().ttlMs);
-        state.activeTimers.set(messageId, timer);
+        scheduleMessageTimer(messageId);
       }
 
       state.messageOrder = nextOrder;
@@ -355,6 +403,12 @@
         return;
       }
 
+      if (isOverflowFadeMode()) {
+        // In overflow mode, message removal is driven only by maxVisible overflow.
+        clearExpiredQueue();
+        return;
+      }
+
       if (state.dragState.active) {
         if (state.expiredMessageIds.length > 0) {
           scheduleExpiredDrain(200);
@@ -424,10 +478,7 @@
         state.messageNodes.set(message.id, row);
         state.messageOrder.push(message.id);
 
-        const timer = window.setTimeout(() => {
-          enqueueExpiredMessage(message.id);
-        }, getCurrentModeProfile().ttlMs);
-        state.activeTimers.set(message.id, timer);
+        scheduleMessageTimer(message.id);
       }
 
       enforceMaxVisible();
@@ -449,12 +500,13 @@
 
     function enforceMaxVisible() {
       const profile = getCurrentModeProfile();
+      const useOverflowFade = isOverflowFadeMode(profile);
       while (state.messageOrder.length > profile.maxVisible) {
         const oldestId = state.messageOrder[0];
         if (!oldestId) {
           break;
         }
-        removeMessageNode(oldestId, true);
+        removeMessageNode(oldestId, !useOverflowFade);
       }
     }
 
@@ -464,6 +516,7 @@
         return;
       }
       renderer.updateRows(state.messageNodes.values());
+      syncFadeOutModeForVisibleMessages();
       syncEditDummyRows();
       syncDragOverlayLayout();
     }
@@ -510,9 +563,11 @@
       const profile = getCurrentModeProfile();
       const fadeMs = profile.fadeMs;
       const fadeShiftPx = Math.max(24, Math.round(profile.fontSizePx * 2));
+      const fadeShift =
+        profile.horizontalAlign === "right" ? fadeShiftPx : -fadeShiftPx;
       node.style.transition = `opacity ${fadeMs}ms ease, transform ${fadeMs}ms ease`;
       node.style.opacity = "0";
-      node.style.transform = `translateX(-${fadeShiftPx}px)`;
+      node.style.transform = `translateX(${fadeShift}px)`;
 
       window.setTimeout(() => {
         if (node.parentNode) {
@@ -525,12 +580,7 @@
     function clearAllMessages() {
       state.renderQueue.length = 0;
       state.removeQueue.length = 0;
-      state.expiredMessageIds = [];
-      state.expiredMessageIdSet.clear();
-      if (state.expireDrainTimer) {
-        window.clearTimeout(state.expireDrainTimer);
-        state.expireDrainTimer = 0;
-      }
+      clearExpiredQueue();
 
       for (const messageId of state.messageNodes.keys()) {
         clearMessageTimer(messageId);

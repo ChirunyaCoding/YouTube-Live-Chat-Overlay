@@ -15,12 +15,15 @@
   const RENDERER_SELECTOR = [
     "yt-live-chat-text-message-renderer",
     "yt-live-chat-paid-message-renderer",
+    "yt-live-chat-legacy-paid-message-renderer",
     "yt-live-chat-membership-item-renderer",
     "yt-live-chat-sponsorships-gift-purchase-announcement-renderer",
     "yt-live-chat-sponsorships-gift-redemption-announcement-renderer",
     "yt-live-chat-membership-gift-purchase-announcement-renderer",
     "yt-live-chat-membership-gift-redemption-announcement-renderer",
     "yt-live-chat-paid-sticker-renderer",
+    "yt-live-chat-banner-renderer",
+    "yt-live-chat-banner-chat-summary-renderer",
     "yt-live-chat-viewer-engagement-message-renderer",
     "yt-live-chat-mode-change-message-renderer"
   ].join(",");
@@ -60,6 +63,7 @@
 
   const DEFAULT_MODE_PROFILE = {
     maxVisible: 8,
+    fadeOutTrigger: "timer",
     ttlMs: 9000,
     fadeMs: 300,
     sequentialFadeSec: 0.3,
@@ -70,6 +74,15 @@
     rowGapPx: 10,
     horizontalAlign: "left",
     verticalAlign: "bottom",
+    identityAlign: "left",
+    offsetsByAnchorX: {
+      left: 12,
+      right: 12
+    },
+    offsetsByAnchorY: {
+      top: 24,
+      bottom: 24
+    },
     offsetXPx: 12,
     offsetYPx: 24,
     strokePx: 1.6,
@@ -79,11 +92,28 @@
     showAuthorName: true
   };
 
+  const DEFAULT_SHARED_PROFILE_FIELDS = {
+    fontSizePx: false,
+    anchorSettings: false
+  };
+
+  function cloneModeProfile(modeProfile) {
+    return {
+      ...modeProfile,
+      offsetsByAnchorX: {
+        ...(modeProfile.offsetsByAnchorX || DEFAULT_MODE_PROFILE.offsetsByAnchorX)
+      },
+      offsetsByAnchorY: {
+        ...(modeProfile.offsetsByAnchorY || DEFAULT_MODE_PROFILE.offsetsByAnchorY)
+      }
+    };
+  }
+
   function createModeProfiles(modeProfile) {
     return {
-      fullscreen: { ...modeProfile },
-      theater: { ...modeProfile },
-      normal: { ...modeProfile }
+      fullscreen: cloneModeProfile(modeProfile),
+      theater: cloneModeProfile(modeProfile),
+      normal: cloneModeProfile(modeProfile)
     };
   }
 
@@ -100,9 +130,11 @@
       theater: true,
       normal: true
     },
+    sharedProfileFields: { ...DEFAULT_SHARED_PROFILE_FIELDS },
     modeProfiles: createModeProfiles(DEFAULT_MODE_PROFILE),
     panelModeProfiles: createPanelModeProfiles(DEFAULT_MODE_PROFILE),
     maxVisible: DEFAULT_MODE_PROFILE.maxVisible,
+    fadeOutTrigger: DEFAULT_MODE_PROFILE.fadeOutTrigger,
     ttlMs: DEFAULT_MODE_PROFILE.ttlMs,
     fadeMs: DEFAULT_MODE_PROFILE.fadeMs,
     sequentialFadeSec: DEFAULT_MODE_PROFILE.sequentialFadeSec,
@@ -113,6 +145,9 @@
     rowGapPx: DEFAULT_MODE_PROFILE.rowGapPx,
     horizontalAlign: DEFAULT_MODE_PROFILE.horizontalAlign,
     verticalAlign: DEFAULT_MODE_PROFILE.verticalAlign,
+    identityAlign: DEFAULT_MODE_PROFILE.identityAlign,
+    offsetsByAnchorX: { ...DEFAULT_MODE_PROFILE.offsetsByAnchorX },
+    offsetsByAnchorY: { ...DEFAULT_MODE_PROFILE.offsetsByAnchorY },
     offsetXPx: DEFAULT_MODE_PROFILE.offsetXPx,
     offsetYPx: DEFAULT_MODE_PROFILE.offsetYPx,
     strokePx: DEFAULT_MODE_PROFILE.strokePx,
@@ -148,19 +183,86 @@
         : input.horizontalAlign === "left"
           ? "left"
           : fallback.horizontalAlign;
+    const fadeOutTrigger =
+      input.fadeOutTrigger === "overflow"
+        ? "overflow"
+        : input.fadeOutTrigger === "timer"
+          ? "timer"
+          : fallback.fadeOutTrigger;
     const verticalAlign =
       input.verticalAlign === "top"
         ? "top"
         : input.verticalAlign === "bottom"
           ? "bottom"
           : fallback.verticalAlign;
+    const identityAlign =
+      input.identityAlign === "right"
+        ? "right"
+        : input.identityAlign === "left"
+          ? "left"
+          : fallback.identityAlign;
     const offsetXInput =
       typeof input.offsetXPx !== "undefined" ? input.offsetXPx : input.leftOffsetPx;
     const offsetYInput =
       typeof input.offsetYPx !== "undefined" ? input.offsetYPx : input.bottomOffsetPx;
 
+    const fallbackOffsetX = Math.round(
+      clampNumber(fallback.offsetXPx, 0, OFFSET_MAX_X_BASE, DEFAULT_MODE_PROFILE.offsetXPx)
+    );
+    const fallbackOffsetY = Math.round(
+      clampNumber(fallback.offsetYPx, 0, OFFSET_MAX_Y_BASE, DEFAULT_MODE_PROFILE.offsetYPx)
+    );
+    const fallbackOffsetsByAnchorXInput =
+      fallback.offsetsByAnchorX && typeof fallback.offsetsByAnchorX === "object"
+        ? fallback.offsetsByAnchorX
+        : {};
+    const fallbackOffsetsByAnchorYInput =
+      fallback.offsetsByAnchorY && typeof fallback.offsetsByAnchorY === "object"
+        ? fallback.offsetsByAnchorY
+        : {};
+    const fallbackOffsetsByAnchorX = {
+      left: Math.round(clampNumber(fallbackOffsetsByAnchorXInput.left, 0, OFFSET_MAX_X_BASE, fallbackOffsetX)),
+      right: Math.round(
+        clampNumber(fallbackOffsetsByAnchorXInput.right, 0, OFFSET_MAX_X_BASE, fallbackOffsetX)
+      )
+    };
+    const fallbackOffsetsByAnchorY = {
+      top: Math.round(clampNumber(fallbackOffsetsByAnchorYInput.top, 0, OFFSET_MAX_Y_BASE, fallbackOffsetY)),
+      bottom: Math.round(
+        clampNumber(fallbackOffsetsByAnchorYInput.bottom, 0, OFFSET_MAX_Y_BASE, fallbackOffsetY)
+      )
+    };
+
+    const inputOffsetsByAnchorX =
+      input.offsetsByAnchorX && typeof input.offsetsByAnchorX === "object"
+        ? input.offsetsByAnchorX
+        : {};
+    const inputOffsetsByAnchorY =
+      input.offsetsByAnchorY && typeof input.offsetsByAnchorY === "object"
+        ? input.offsetsByAnchorY
+        : {};
+    const legacyOffsetXFallback =
+      typeof offsetXInput !== "undefined" ? offsetXInput : fallbackOffsetsByAnchorX.left;
+    const legacyOffsetYFallback =
+      typeof offsetYInput !== "undefined" ? offsetYInput : fallbackOffsetsByAnchorY.bottom;
+    const offsetsByAnchorX = {
+      left: Math.round(clampNumber(inputOffsetsByAnchorX.left, 0, OFFSET_MAX_X_BASE, legacyOffsetXFallback)),
+      right: Math.round(clampNumber(inputOffsetsByAnchorX.right, 0, OFFSET_MAX_X_BASE, legacyOffsetXFallback))
+    };
+    const offsetsByAnchorY = {
+      top: Math.round(clampNumber(inputOffsetsByAnchorY.top, 0, OFFSET_MAX_Y_BASE, legacyOffsetYFallback)),
+      bottom: Math.round(
+        clampNumber(inputOffsetsByAnchorY.bottom, 0, OFFSET_MAX_Y_BASE, legacyOffsetYFallback)
+      )
+    };
+    const activeOffsetXPx =
+      horizontalAlign === "right" ? offsetsByAnchorX.right : offsetsByAnchorX.left;
+    const activeOffsetYPx =
+      verticalAlign === "top" ? offsetsByAnchorY.top : offsetsByAnchorY.bottom;
+
     return {
       maxVisible: Math.round(clampNumber(input.maxVisible, 1, 20, fallback.maxVisible)),
+      fadeOutTrigger,
       ttlMs: Math.round(clampNumber(input.ttlMs, 1000, 30000, fallback.ttlMs)),
       fadeMs: Math.round(clampNumber(input.fadeMs, 0, 2000, fallback.fadeMs)),
       sequentialFadeSec: clampNumber(
@@ -178,12 +280,11 @@
       rowGapPx: Math.round(clampNumber(input.rowGapPx, 0, 24, fallback.rowGapPx)),
       horizontalAlign,
       verticalAlign,
-      offsetXPx: Math.round(
-        clampNumber(offsetXInput, 0, OFFSET_MAX_X_BASE, fallback.offsetXPx)
-      ),
-      offsetYPx: Math.round(
-        clampNumber(offsetYInput, 0, OFFSET_MAX_Y_BASE, fallback.offsetYPx)
-      ),
+      identityAlign,
+      offsetsByAnchorX,
+      offsetsByAnchorY,
+      offsetXPx: activeOffsetXPx,
+      offsetYPx: activeOffsetYPx,
       strokePx: clampNumber(input.strokePx, 0, 4, fallback.strokePx),
       textOpacity: clampNumber(input.textOpacity, 0.1, 1, fallback.textOpacity),
       messageBgOpacity: clampNumber(
@@ -215,6 +316,34 @@
     );
   }
 
+  function normalizeSharedProfileFields(raw) {
+    const input = raw && typeof raw === "object" ? raw : {};
+    return {
+      fontSizePx:
+        typeof input.fontSizePx === "boolean"
+          ? input.fontSizePx
+          : DEFAULT_SHARED_PROFILE_FIELDS.fontSizePx,
+      anchorSettings:
+        typeof input.anchorSettings === "boolean"
+          ? input.anchorSettings
+          : DEFAULT_SHARED_PROFILE_FIELDS.anchorSettings
+    };
+  }
+
+  function syncProfileActiveOffsets(profile) {
+    if (!profile || typeof profile !== "object") {
+      return;
+    }
+    profile.offsetXPx =
+      profile.horizontalAlign === "right"
+        ? profile.offsetsByAnchorX.right
+        : profile.offsetsByAnchorX.left;
+    profile.offsetYPx =
+      profile.verticalAlign === "top"
+        ? profile.offsetsByAnchorY.top
+        : profile.offsetsByAnchorY.bottom;
+  }
+
   function normalizeConfig(rawConfig) {
     const input = rawConfig && typeof rawConfig === "object" ? rawConfig : {};
     const modeInput =
@@ -229,10 +358,15 @@
       input.panelModeProfiles && typeof input.panelModeProfiles === "object"
         ? input.panelModeProfiles
         : {};
+    const sharedProfileFieldsInput =
+      input.sharedProfileFields && typeof input.sharedProfileFields === "object"
+        ? input.sharedProfileFields
+        : {};
     const modeSizeScaleInput =
       input.modeSizeScale && typeof input.modeSizeScale === "object"
         ? input.modeSizeScale
         : {};
+    const sharedProfileFields = normalizeSharedProfileFields(sharedProfileFieldsInput);
 
     const legacyBaseProfile = normalizeModeProfile(input, DEFAULT_MODE_PROFILE);
     const legacyScale = {
@@ -276,10 +410,40 @@
       0.9,
       panelModeProfiles.closed.fullscreen.messageBgOpacity
     );
+    const sharedFadeOutTrigger =
+      input.fadeOutTrigger === "overflow"
+        ? "overflow"
+        : input.fadeOutTrigger === "timer"
+          ? "timer"
+          : panelModeProfiles.closed.fullscreen.fadeOutTrigger;
     for (const panelState of PANEL_STATE_KEYS) {
       for (const mode of MODE_KEYS) {
         panelModeProfiles[panelState][mode].textOpacity = sharedTextOpacity;
         panelModeProfiles[panelState][mode].messageBgOpacity = sharedMessageBgOpacity;
+        panelModeProfiles[panelState][mode].fadeOutTrigger = sharedFadeOutTrigger;
+      }
+    }
+
+    if (sharedProfileFields.fontSizePx) {
+      const sharedFontSize = panelModeProfiles.closed.fullscreen.fontSizePx;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].fontSizePx = sharedFontSize;
+        }
+      }
+    }
+
+    if (sharedProfileFields.anchorSettings) {
+      const sharedHorizontalAlign = panelModeProfiles.closed.fullscreen.horizontalAlign;
+      const sharedVerticalAlign = panelModeProfiles.closed.fullscreen.verticalAlign;
+      const sharedIdentityAlign = panelModeProfiles.closed.fullscreen.identityAlign;
+      for (const panelState of PANEL_STATE_KEYS) {
+        for (const mode of MODE_KEYS) {
+          panelModeProfiles[panelState][mode].horizontalAlign = sharedHorizontalAlign;
+          panelModeProfiles[panelState][mode].verticalAlign = sharedVerticalAlign;
+          panelModeProfiles[panelState][mode].identityAlign = sharedIdentityAlign;
+          syncProfileActiveOffsets(panelModeProfiles[panelState][mode]);
+        }
       }
     }
 
@@ -298,9 +462,11 @@
             ? modeInput.normal
             : DEFAULT_CONFIG.enabledModes.normal
       },
+      sharedProfileFields,
       modeProfiles: panelModeProfiles.closed,
       panelModeProfiles,
       maxVisible: panelModeProfiles.closed.fullscreen.maxVisible,
+      fadeOutTrigger: panelModeProfiles.closed.fullscreen.fadeOutTrigger,
       ttlMs: panelModeProfiles.closed.fullscreen.ttlMs,
       fadeMs: panelModeProfiles.closed.fullscreen.fadeMs,
       sequentialFadeSec: panelModeProfiles.closed.fullscreen.sequentialFadeSec,
@@ -311,6 +477,9 @@
       rowGapPx: panelModeProfiles.closed.fullscreen.rowGapPx,
       horizontalAlign: panelModeProfiles.closed.fullscreen.horizontalAlign,
       verticalAlign: panelModeProfiles.closed.fullscreen.verticalAlign,
+      identityAlign: panelModeProfiles.closed.fullscreen.identityAlign,
+      offsetsByAnchorX: panelModeProfiles.closed.fullscreen.offsetsByAnchorX,
+      offsetsByAnchorY: panelModeProfiles.closed.fullscreen.offsetsByAnchorY,
       offsetXPx: panelModeProfiles.closed.fullscreen.offsetXPx,
       offsetYPx: panelModeProfiles.closed.fullscreen.offsetYPx,
       strokePx: panelModeProfiles.closed.fullscreen.strokePx,

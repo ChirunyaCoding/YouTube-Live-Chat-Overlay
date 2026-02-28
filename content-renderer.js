@@ -131,6 +131,7 @@
 
     function applyRowStyles(row) {
       const profile = getCurrentModeProfile();
+      const isIdentityRightAligned = profile.identityAlign === "right";
       const fontSizePx = profile.fontSizePx;
       const avatarSizePx = profile.avatarSizePx;
       const strokePx = profile.strokePx;
@@ -142,7 +143,8 @@
       const body = row.querySelector(".yt-chat-overlay-body");
 
       row.style.display = "flex";
-      row.style.alignItems = "center";
+      row.style.alignItems = "flex-start";
+      row.style.flexDirection = isIdentityRightAligned ? "row-reverse" : "row";
       row.style.maxWidth = "100%";
       row.style.gap = profile.showAvatar
         ? `${Math.max(6, Math.round(avatarSizePx * 0.2))}px`
@@ -170,26 +172,33 @@
       }
 
       if (textWrap) {
-        textWrap.style.display = "flex";
-        textWrap.style.alignItems = "center";
-        textWrap.style.flexWrap = "nowrap";
-        textWrap.style.gap = `${Math.max(6, Math.round(fontSizePx * 0.3))}px`;
+        textWrap.style.display = "block";
         textWrap.style.minWidth = "0";
         textWrap.style.maxWidth = "100%";
         textWrap.style.flex = "1 1 auto";
         textWrap.style.overflow = "visible";
+        textWrap.style.textAlign = isIdentityRightAligned ? "right" : "left";
+      }
+
+      if (textWrap && authorMeta && body) {
+        if (isIdentityRightAligned) {
+          if (textWrap.firstChild !== body) {
+            textWrap.insertBefore(body, authorMeta);
+          }
+        } else if (textWrap.firstChild !== authorMeta) {
+          textWrap.insertBefore(authorMeta, body);
+        }
       }
 
       const outlineShadow = createOutlineShadow(strokePx);
       if (authorMeta) {
-        const hasBadge = Boolean(badges && badges.childElementCount > 0);
-        authorMeta.style.display =
-          profile.showAuthorName || hasBadge ? "inline-flex" : "none";
+        authorMeta.style.display = profile.showAuthorName ? "inline-flex" : "none";
         authorMeta.style.alignItems = "center";
         authorMeta.style.gap = `${Math.max(4, Math.round(fontSizePx * 0.16))}px`;
-        authorMeta.style.marginRight = "0";
+        const authorGapPx = Math.max(6, Math.round(fontSizePx * 0.3));
+        authorMeta.style.marginRight = isIdentityRightAligned ? "0" : `${authorGapPx}px`;
+        authorMeta.style.marginLeft = isIdentityRightAligned ? `${authorGapPx}px` : "0";
         authorMeta.style.verticalAlign = "middle";
-        authorMeta.style.flex = "0 0 auto";
       }
 
       if (author) {
@@ -250,10 +259,9 @@
         body.style.whiteSpace = "pre-wrap";
         body.style.overflowWrap = "anywhere";
         body.style.wordBreak = "break-word";
-        body.style.display = "block";
+        body.style.textAlign = isIdentityRightAligned ? "right" : "left";
+        body.style.display = "inline";
         body.style.verticalAlign = "middle";
-        body.style.flex = "1 1 auto";
-        body.style.alignSelf = "center";
         body.style.writingMode = "horizontal-tb";
         body.style.textOrientation = "mixed";
       }
@@ -271,11 +279,15 @@
     }
 
     function createMessageRow(message) {
+      const profile = getCurrentModeProfile();
+      const enterShiftPx = 8;
+      const enterShift =
+        profile.horizontalAlign === "right" ? enterShiftPx : -enterShiftPx;
       const row = document.createElement("div");
       row.dataset.messageId = message.id;
       row.dataset.accentColor = message.accentColor || "";
       row.style.opacity = "0";
-      row.style.transform = "translateX(-8px)";
+      row.style.transform = `translateX(${enterShift}px)`;
       row.style.transition = "opacity 220ms ease, transform 220ms ease";
 
       const avatar = createAvatarNode(message);

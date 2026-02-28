@@ -51,6 +51,7 @@
         case "yt-live-chat-text-message-renderer":
           return "text";
         case "yt-live-chat-paid-message-renderer":
+        case "yt-live-chat-legacy-paid-message-renderer":
           return "paid";
         case "yt-live-chat-membership-item-renderer":
         case "yt-live-chat-sponsorships-gift-purchase-announcement-renderer":
@@ -60,6 +61,21 @@
           return "membership";
         case "yt-live-chat-paid-sticker-renderer":
           return "sticker";
+        case "yt-live-chat-banner-chat-summary-renderer": {
+          if (
+            renderer.querySelector("#purchase-amount, #purchase-amount-chip, .purchase-amount-chip")
+          ) {
+            return "paid";
+          }
+          if (
+            renderer.querySelector(
+              "#header-subtext, #header-primary-text, #primary-text, .primary-text, #author-name"
+            )
+          ) {
+            return "membership";
+          }
+          return "engagement";
+        }
         case "yt-live-chat-viewer-engagement-message-renderer":
           return "engagement";
         case "yt-live-chat-mode-change-message-renderer":
@@ -67,6 +83,34 @@
         default:
           return "";
       }
+    }
+
+    function unwrapRendererForParsing(renderer) {
+      const element = toElement(renderer);
+      if (!element) {
+        return null;
+      }
+
+      const tag = element.tagName.toLowerCase();
+      if (tag !== "yt-live-chat-banner-renderer") {
+        return element;
+      }
+
+      const nested = element.querySelector(
+        [
+          "yt-live-chat-paid-message-renderer",
+          "yt-live-chat-legacy-paid-message-renderer",
+          "yt-live-chat-paid-sticker-renderer",
+          "yt-live-chat-membership-item-renderer",
+          "yt-live-chat-sponsorships-gift-purchase-announcement-renderer",
+          "yt-live-chat-sponsorships-gift-redemption-announcement-renderer",
+          "yt-live-chat-membership-gift-purchase-announcement-renderer",
+          "yt-live-chat-membership-gift-redemption-announcement-renderer",
+          "yt-live-chat-banner-chat-summary-renderer"
+        ].join(",")
+      );
+
+      return nested || element;
     }
 
     function getImageSource(image) {
@@ -446,7 +490,18 @@
           runs.push(amountRun);
         }
 
-        runs.push(...buildRunsFromSelectors(renderer, ["#message", ".message"]));
+        runs.push(
+          ...buildRunsFromSelectors(renderer, [
+            "#message",
+            ".message",
+            "#text",
+            ".text",
+            "#primary-text",
+            ".primary-text",
+            "#header-primary-text",
+            "#snippet-text"
+          ])
+        );
         return compactRuns(runs);
       }
 
@@ -469,7 +524,10 @@
             "#primary-text",
             ".primary-text",
             "#text",
-            ".text"
+            ".text",
+            "#header-subtext",
+            ".header-subtext",
+            "#snippet-text"
           ])
         );
         return compactRuns(runs);
@@ -485,7 +543,16 @@
         if (amountRun) {
           runs.push(amountRun);
         }
-        runs.push(...buildRunsFromSelectors(renderer, ["#message", "#sticker", ".message"]));
+        runs.push(
+          ...buildRunsFromSelectors(renderer, [
+            "#message",
+            "#sticker",
+            ".message",
+            "#sticker-display-text",
+            "#text",
+            ".text"
+          ])
+        );
         return compactRuns(runs);
       }
 
@@ -537,7 +604,16 @@
             "#purchase-amount-chip",
             ".purchase-amount-chip"
           ]);
-          const body = pickFirstText(renderer, ["#message", ".message"]);
+          const body = pickFirstText(renderer, [
+            "#message",
+            ".message",
+            "#text",
+            ".text",
+            "#primary-text",
+            ".primary-text",
+            "#header-primary-text",
+            "#snippet-text"
+          ]);
           return [amount, body].filter(Boolean).join(" ");
         }
         case "membership": {
@@ -553,7 +629,10 @@
             "#primary-text",
             ".primary-text",
             "#text",
-            ".text"
+            ".text",
+            "#header-subtext",
+            ".header-subtext",
+            "#snippet-text"
           ]);
           return [header, body].filter(Boolean).join(" ");
         }
@@ -563,7 +642,13 @@
             "#purchase-amount",
             ".purchase-amount-chip"
           ]);
-          const sticker = pickFirstText(renderer, ["#sticker", "#message"]);
+          const sticker = pickFirstText(renderer, [
+            "#sticker",
+            "#message",
+            "#sticker-display-text",
+            "#text",
+            ".text"
+          ]);
           return [amount, sticker].filter(Boolean).join(" ");
         }
         case "engagement":
@@ -598,23 +683,28 @@
     }
 
     function parseRendererMessage(renderer) {
-      const type = mapRendererType(renderer);
+      const parseTarget = unwrapRendererForParsing(renderer);
+      if (!parseTarget) {
+        return null;
+      }
+
+      const type = mapRendererType(parseTarget);
       if (!type) {
         return null;
       }
 
-      const authorName = resolveAuthorName(renderer);
+      const authorName = resolveAuthorName(parseTarget);
       if (type === "text" && isSystemAuthorName(authorName)) {
         return null;
       }
       const timestampMs = Date.now();
-      const messageRuns = resolveMessageRuns(renderer, type);
+      const messageRuns = resolveMessageRuns(parseTarget, type);
       const runsText = runsToPlainText(messageRuns);
-      const rawText = runsText || resolveMessageText(renderer, type);
+      const rawText = runsText || resolveMessageText(parseTarget, type);
       const label = typeInfo[type] ? typeInfo[type].label : "";
       const text = rawText || label || "";
-      const timestampToken = resolveTimestampToken(renderer, timestampMs);
-      const id = buildMessageId(renderer, type, authorName, text, timestampToken);
+      const timestampToken = resolveTimestampToken(parseTarget, timestampMs);
+      const id = buildMessageId(parseTarget, type, authorName, text, timestampToken);
 
       if (hasSeenId(id)) {
         return null;
@@ -626,12 +716,12 @@
         id,
         type,
         authorName,
-        authorAvatarUrl: resolveAvatarUrl(renderer),
+        authorAvatarUrl: resolveAvatarUrl(parseTarget),
         text,
         messageRuns,
-        authorBadges: resolveAuthorBadges(renderer),
+        authorBadges: resolveAuthorBadges(parseTarget),
         timestampMs,
-        accentColor: resolveAccentColor(renderer, type),
+        accentColor: resolveAccentColor(parseTarget, type),
         priority: typeInfo[type] ? typeInfo[type].priority : 1
       };
     }

@@ -34,6 +34,7 @@
   /**
    * @typedef {Object} OverlayModeProfile
    * @property {number} maxVisible
+   * @property {"timer"|"overflow"} fadeOutTrigger
    * @property {number} ttlMs
    * @property {number} fadeMs
    * @property {number} sequentialFadeSec
@@ -44,6 +45,9 @@
    * @property {number} rowGapPx
    * @property {"left"|"right"} horizontalAlign
    * @property {"top"|"bottom"} verticalAlign
+   * @property {"left"|"right"} identityAlign
+   * @property {{left: number, right: number}} offsetsByAnchorX
+   * @property {{top: number, bottom: number}} offsetsByAnchorY
    * @property {number} offsetXPx
    * @property {number} offsetYPx
    * @property {number} strokePx
@@ -56,9 +60,11 @@
   /**
    * @typedef {Object} OverlayConfig
    * @property {{fullscreen: boolean, theater: boolean, normal: boolean}} enabledModes
+   * @property {{fontSizePx: boolean, anchorSettings: boolean}} sharedProfileFields
    * @property {{fullscreen: OverlayModeProfile, theater: OverlayModeProfile, normal: OverlayModeProfile}} modeProfiles
    * @property {{open: {fullscreen: OverlayModeProfile, theater: OverlayModeProfile, normal: OverlayModeProfile}, closed: {fullscreen: OverlayModeProfile, theater: OverlayModeProfile, normal: OverlayModeProfile}}} panelModeProfiles
    * @property {number} maxVisible
+   * @property {"timer"|"overflow"} fadeOutTrigger
    * @property {number} ttlMs
    * @property {number} fadeMs
    * @property {number} sequentialFadeSec
@@ -69,6 +75,9 @@
    * @property {number} rowGapPx
    * @property {"left"|"right"} horizontalAlign
    * @property {"top"|"bottom"} verticalAlign
+   * @property {"left"|"right"} identityAlign
+   * @property {{left: number, right: number}} offsetsByAnchorX
+   * @property {{top: number, bottom: number}} offsetsByAnchorY
    * @property {number} offsetXPx
    * @property {number} offsetYPx
    * @property {number} strokePx

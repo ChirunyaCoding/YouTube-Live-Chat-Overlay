@@ -7,163 +7,241 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <main class="panel">
-      <h1>Overlay Settings</h1>
-      <p class="hint">変更は自動保存され、開いているYouTubeタブに反映されます。</p>
+    <div class="app-container">
+      <header class="app-header">
+        <h1>YouTube Chat Overlay</h1>
+        <p class="subtitle">設定は自動保存され、即座に反映されます</p>
+      </header>
 
-      <form id="settings-form" class="settings">
-        <section class="group">
-          <h2 class="group-title">表示モード</h2>
+      <nav class="tabs">
+        <button type="button" class="tab-btn active" data-tab="general">一般</button>
+        <button type="button" class="tab-btn" data-tab="appearance">外観</button>
+        <button type="button" class="tab-btn" data-tab="layout">配置・動作</button>
+      </nav>
 
-          <label class="field checkbox">
-            <input id="modeFullscreen" type="checkbox" />
-            <span>全画面で有効</span>
-          </label>
+      <main class="panel">
+        <form id="settings-form">
+          
+          <div id="general" class="tab-pane active">
+            <section class="settings-group">
+              <h2 class="group-title">有効化する表示モード</h2>
+              
+              <label class="toggle-row">
+                <span class="label-text">全画面モード</span>
+                <div class="toggle-switch">
+                  <input id="modeFullscreen" type="checkbox" />
+                  <span class="slider"></span>
+                </div>
+              </label>
+              
+              <label class="toggle-row">
+                <span class="label-text">シアターモード</span>
+                <div class="toggle-switch">
+                  <input id="modeTheater" type="checkbox" />
+                  <span class="slider"></span>
+                </div>
+              </label>
+              
+              <label class="toggle-row">
+                <span class="label-text">通常表示</span>
+                <div class="toggle-switch">
+                  <input id="modeNormal" type="checkbox" />
+                  <span class="slider"></span>
+                </div>
+              </label>
+            </section>
 
-          <label class="field checkbox">
-            <input id="modeTheater" type="checkbox" />
-            <span>シアターモードで有効</span>
-          </label>
+            <section class="settings-group">
+              <h2 class="group-title">編集プロファイル設定</h2>
+              <p class="hint">以下の設定は「モード × パネル状態」ごとに保存されます。</p>
+              
+              <div class="field-row">
+                <label for="profileMode">編集対象モード</label>
+                <select id="profileMode">
+                  <option value="fullscreen">全画面</option>
+                  <option value="theater">シアター</option>
+                  <option value="normal">通常表示</option>
+                </select>
+              </div>
 
-          <label class="field checkbox">
-            <input id="modeNormal" type="checkbox" />
-            <span>通常表示で有効</span>
-          </label>
-        </section>
+              <div class="field-row">
+                <label for="profilePanelState">チャットパネル状態</label>
+                <select id="profilePanelState">
+                  <option value="closed">閉じている時</option>
+                  <option value="open">開いている時</option>
+                </select>
+              </div>
 
-        <section class="group">
-          <h2 class="group-title">モード別設定</h2>
+              <label class="toggle-row">
+                <span class="label-text">文字サイズを全設定で共通にする</span>
+                <div class="toggle-switch">
+                  <input id="shareFontSize" type="checkbox" />
+                  <span class="slider"></span>
+                </div>
+              </label>
 
-          <label class="field">
-            <span>編集対象モード</span>
-            <select id="profileMode">
-              <option value="fullscreen">全画面</option>
-              <option value="theater">シアター</option>
-              <option value="normal">通常表示</option>
-            </select>
-          </label>
+              <label class="toggle-row">
+                <span class="label-text">基準設定を全設定で共通にする</span>
+                <div class="toggle-switch">
+                  <input id="shareAnchorSettings" type="checkbox" />
+                  <span class="slider"></span>
+                </div>
+              </label>
+            </section>
+          </div>
 
-          <label class="field">
-            <span>チャットパネル状態</span>
-            <select id="profilePanelState">
-              <option value="closed">閉じている時</option>
-              <option value="open">開いている時</option>
-            </select>
-          </label>
-          <p class="hint mini">
-            基本は「選択中モード × チャットパネル状態」ごとに保存されます（文字/背景不透明度は全表示共通）。
-          </p>
+          <div id="appearance" class="tab-pane">
+            <section class="settings-group">
+              <h2 class="group-title">表示要素</h2>
+              <label class="toggle-row">
+                <span class="label-text">アバターを表示</span>
+                <div class="toggle-switch">
+                  <input id="showAvatar" type="checkbox" />
+                  <span class="slider"></span>
+                </div>
+              </label>
 
-          <label class="field checkbox">
-            <input id="showAvatar" type="checkbox" />
-            <span>アバター表示</span>
-          </label>
+              <label class="toggle-row">
+                <span class="label-text">名前（@xxx）を表示</span>
+                <div class="toggle-switch">
+                  <input id="showAuthorName" type="checkbox" />
+                  <span class="slider"></span>
+                </div>
+              </label>
 
-          <label class="field checkbox">
-            <input id="showAuthorName" type="checkbox" />
-            <span>名前（@xxx）表示</span>
-          </label>
+              <div class="field-row">
+                <label for="identityAlign">アイコン・名前の位置</label>
+                <select id="identityAlign">
+                  <option value="left">左</option>
+                  <option value="right">右</option>
+                </select>
+              </div>
+            </section>
 
-          <label class="field">
-            <span>文字サイズ (px)</span>
-            <input id="fontSizePx" type="number" min="12" max="64" step="1" />
-          </label>
+            <section class="settings-group">
+              <h2 class="group-title">テキスト・サイズ</h2>
+              <div class="field-row">
+                <label for="fontSizePx">文字サイズ (px)</label>
+                <input id="fontSizePx" type="number" min="12" max="64" step="1" />
+              </div>
+              <div class="field-row">
+                <label for="fontWeight">文字の太さ</label>
+                <input id="fontWeight" type="number" min="100" max="900" step="100" />
+              </div>
+              <div class="field-row">
+                <label for="avatarSizePx">アバターサイズ (px)</label>
+                <input id="avatarSizePx" type="number" min="24" max="96" step="1" />
+              </div>
+              <div class="field-row">
+                <label for="strokePx">縁取り太さ (px)</label>
+                <input id="strokePx" type="number" min="0" max="4" step="0.1" />
+              </div>
+            </section>
 
-          <label class="field">
-            <span>文字の太さ (100-900)</span>
-            <input id="fontWeight" type="number" min="100" max="900" step="100" />
-          </label>
+            <section class="settings-group">
+              <h2 class="group-title">不透明度</h2>
+              <div class="field-row">
+                <label for="textOpacity">文字不透明度 (0.1-1.0)</label>
+                <input id="textOpacity" type="number" min="0.1" max="1" step="0.05" />
+              </div>
+              <div class="field-row">
+                <label for="messageBgOpacity">背景不透明度 (0-0.9)</label>
+                <input id="messageBgOpacity" type="number" min="0" max="0.9" step="0.05" />
+              </div>
+            </section>
+          </div>
 
-          <label class="field">
-            <span>アバターサイズ (px)</span>
-            <input id="avatarSizePx" type="number" min="24" max="96" step="1" />
-          </label>
+          <div id="layout" class="tab-pane">
+            <section class="settings-group">
+              <h2 class="group-title">レイアウト・配置</h2>
+              <div class="field-row">
+                <label for="laneWidthPercent">レーン幅 (%)</label>
+                <input id="laneWidthPercent" type="number" min="20" max="80" step="1" />
+              </div>
+              <div class="field-row">
+                <label for="rowGapPx">行間隔 (px)</label>
+                <input id="rowGapPx" type="number" min="0" max="24" step="1" />
+              </div>
+              <div class="field-row">
+                <label for="horizontalAlign">横位置アンカー</label>
+                <select id="horizontalAlign">
+                  <option value="left">左基準</option>
+                  <option value="right">右基準</option>
+                </select>
+              </div>
+              <div class="field-row">
+                <label for="verticalAlign">縦位置アンカー</label>
+                <select id="verticalAlign">
+                  <option value="bottom">下基準</option>
+                  <option value="top">上基準</option>
+                </select>
+              </div>
+              <div class="field-row">
+                <label for="offsetXPx">横オフセット (px)</label>
+                <input id="offsetXPx" type="number" min="0" max="1920" step="1" />
+              </div>
+              <div class="field-row">
+                <label for="offsetYPx">縦オフセット (px)</label>
+                <input id="offsetYPx" type="number" min="0" max="1080" step="1" />
+              </div>
+            </section>
 
-          <label class="field">
-            <span>レーン幅 (%)</span>
-            <input id="laneWidthPercent" type="number" min="20" max="80" step="1" />
-          </label>
+            <section class="settings-group">
+              <h2 class="group-title">表示・アニメーション</h2>
+              <div class="field-row">
+                <label for="maxVisible">最大表示件数</label>
+                <input id="maxVisible" type="number" min="1" max="20" step="1" />
+              </div>
+              <div class="field-row">
+                <label for="fadeOutTrigger">フェードアウト条件</label>
+                <select id="fadeOutTrigger">
+                  <option value="timer">表示時間でフェード</option>
+                  <option value="overflow">上限到達時にフェード</option>
+                </select>
+              </div>
+              <div class="field-row">
+                <label for="ttlMs">表示時間 (ms)</label>
+                <input id="ttlMs" type="number" min="1000" max="30000" step="100" />
+              </div>
+              <div class="field-row">
+                <label for="fadeMs">フェード時間 (ms)</label>
+                <input id="fadeMs" type="number" min="0" max="2000" step="10" />
+              </div>
+              <div class="field-row">
+                <label for="sequentialFadeSec">連続フェード間隔 (秒)</label>
+                <input id="sequentialFadeSec" type="number" min="0" max="10" step="0.1" />
+              </div>
+            </section>
+          </div>
 
-          <label class="field">
-            <span>最大表示件数</span>
-            <input id="maxVisible" type="number" min="1" max="20" step="1" />
-          </label>
+        </form>
+      </main>
 
-          <label class="field">
-            <span>表示時間 (ms)</span>
-            <input id="ttlMs" type="number" min="1000" max="30000" step="100" />
-          </label>
-
-          <label class="field">
-            <span>フェード時間 (ms)</span>
-            <input id="fadeMs" type="number" min="0" max="2000" step="10" />
-          </label>
-
-          <label class="field">
-            <span>連続フェード間隔 (秒)</span>
-            <input id="sequentialFadeSec" type="number" min="0" max="10" step="0.1" />
-          </label>
-
-          <label class="field">
-            <span>行間隔 (px)</span>
-            <input id="rowGapPx" type="number" min="0" max="24" step="1" />
-          </label>
-
-          <label class="field">
-            <span>横位置アンカー</span>
-            <select id="horizontalAlign">
-              <option value="left">左基準</option>
-              <option value="right">右基準</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>縦位置アンカー</span>
-            <select id="verticalAlign">
-              <option value="bottom">下基準</option>
-              <option value="top">上基準</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>横オフセット (基準px)</span>
-            <input id="offsetXPx" type="number" min="0" max="1920" step="1" />
-          </label>
-
-          <label class="field">
-            <span>縦オフセット (基準px)</span>
-            <input id="offsetYPx" type="number" min="0" max="1080" step="1" />
-          </label>
-
-          <label class="field">
-            <span>縁取り太さ (px)</span>
-            <input id="strokePx" type="number" min="0" max="4" step="0.1" />
-          </label>
-
-          <label class="field">
-            <span>文字不透明度 (0.1-1)</span>
-            <input id="textOpacity" type="number" min="0.1" max="1" step="0.05" />
-          </label>
-
-          <label class="field">
-            <span>背景不透明度 (0-0.9)</span>
-            <input
-              id="messageBgOpacity"
-              type="number"
-              min="0"
-              max="0.9"
-              step="0.05"
-            />
-          </label>
-        </section>
-      </form>
-
-      <div class="footer">
-        <button id="resetButton" type="button">デフォルトに戻す</button>
-        <span id="status" aria-live="polite"></span>
-      </div>
-    </main>
+      <footer class="app-footer">
+        <button id="resetButton" class="btn-reset" type="button">デフォルトに戻す</button>
+        <span id="status" class="status-message" aria-live="polite"></span>
+      </footer>
+    </div>
 
     <script src="popup.js"></script>
+    
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const tabBtns = document.querySelectorAll(".tab-btn");
+        const tabPanes = document.querySelectorAll(".tab-pane");
+
+        tabBtns.forEach(btn => {
+          btn.addEventListener("click", () => {
+            // アクティブクラスの初期化
+            tabBtns.forEach(b => b.classList.remove("active"));
+            tabPanes.forEach(p => p.classList.remove("active"));
+            
+            // 選択されたタブをアクティブ化
+            btn.classList.add("active");
+            document.getElementById(btn.getAttribute("data-tab")).classList.add("active");
+          });
+        });
+      });
+    </script>
   </body>
 </html>
