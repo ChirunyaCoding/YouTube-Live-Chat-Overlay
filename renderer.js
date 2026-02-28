@@ -12,12 +12,29 @@
             fontSizePx: 22,
             avatarSizePx: 44,
             strokePx: 1.6,
+            fadeMs: 300,
+            animationPreset: "soft-rise",
             messageBgOpacity: 0.28,
             showAvatar: true,
             showAuthorName: true,
+            authorNameMode: "handle",
             textOpacity: 1,
             fontWeight: 900
           });
+    const hasYoutubeApiKey =
+      deps && typeof deps.hasYoutubeApiKey === "function"
+        ? deps.hasYoutubeApiKey
+        : () => false;
+    const ANIMATION_PRESET_SET = new Set([
+      "soft-rise",
+      "slide",
+      "slide-reverse",
+      "pop",
+      "zoom",
+      "flip",
+      "float",
+      "stretch"
+    ]);
 
     // より自然で高品質なテキストシャドウを生成
     function createOutlineShadow(strokePx) {
@@ -51,7 +68,7 @@
       if (message.authorAvatarUrl) {
         const image = document.createElement("img");
         image.src = message.authorAvatarUrl;
-        image.alt = message.authorName || "avatar";
+        image.alt = message.authorDisplayName || message.authorHandle || message.authorName || "avatar";
         image.style.width = "100%";
         image.style.height = "100%";
         image.style.objectFit = "cover";
@@ -60,7 +77,14 @@
       }
 
       const fallback = document.createElement("span");
-      fallback.textContent = (message.authorName || "?").slice(0, 1).toUpperCase();
+      fallback.textContent = (
+        message.authorDisplayName ||
+        message.authorHandle ||
+        message.authorName ||
+        "?"
+      )
+        .slice(0, 1)
+        .toUpperCase();
       fallback.style.color = "white";
       fallback.style.fontWeight = "800";
       fallback.style.fontSize = "20px";
@@ -165,10 +189,114 @@
       return textHeightPx <= lineHeightPx * 1.6;
     }
 
+    function normalizeAnimationPreset(value) {
+      return ANIMATION_PRESET_SET.has(value) ? value : "soft-rise";
+    }
+
+    function normalizeAuthorNameMode(value) {
+      return value === "display-name" ? "display-name" : "handle";
+    }
+
+    function getEffectiveAuthorNameMode(requestedMode) {
+      // APIキーがない場合は display-name モードを無効化
+      if (requestedMode === "display-name" && !hasYoutubeApiKey()) {
+        return "handle";
+      }
+      return requestedMode === "display-name" ? "display-name" : "handle";
+    }
+
+    function resolveAuthorTextForRow(row, profile) {
+      const requestedMode = normalizeAuthorNameMode(profile && profile.authorNameMode);
+      const mode = getEffectiveAuthorNameMode(requestedMode);
+      const handle = String(row && row.dataset ? row.dataset.authorHandle || "" : "").trim();
+      const displayName = String(
+        row && row.dataset ? row.dataset.authorDisplayName || "" : ""
+      ).trim();
+
+      if (mode === "display-name") {
+        return displayName || handle || "system";
+      }
+
+      const base = handle || displayName || "system";
+      return base.startsWith("@") ? base : `@${base}`;
+    }
+
+    function getFadeInAnimationSpec(profile) {
+      const preset = normalizeAnimationPreset(profile && profile.animationPreset);
+      const baseFadeMs = Number(profile && profile.fadeMs);
+      const durationMs = Math.max(
+        220,
+        Math.min(700, Math.round(Number.isFinite(baseFadeMs) ? baseFadeMs * 1.2 : 360))
+      );
+      if (preset === "slide") {
+        return {
+          durationMs,
+          easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+          fromTransform: "translateX(24px) scale(1)",
+          toTransform: "translateX(0) scale(1)"
+        };
+      }
+      if (preset === "slide-reverse") {
+        return {
+          durationMs,
+          easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+          fromTransform: "translateX(-24px) scale(1)",
+          toTransform: "translateX(0) scale(1)"
+        };
+      }
+      if (preset === "pop") {
+        return {
+          durationMs,
+          easing: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+          fromTransform: "translateY(8px) scale(0.88)",
+          toTransform: "translateY(0) scale(1)"
+        };
+      }
+      if (preset === "zoom") {
+        return {
+          durationMs,
+          easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+          fromTransform: "translateY(4px) scale(1.08)",
+          toTransform: "translateY(0) scale(1)"
+        };
+      }
+      if (preset === "flip") {
+        return {
+          durationMs,
+          easing: "cubic-bezier(0.18, 0.9, 0.22, 1.2)",
+          fromTransform: "translateY(8px) rotate(-7deg) scale(0.9)",
+          toTransform: "translateY(0) rotate(0deg) scale(1)"
+        };
+      }
+      if (preset === "float") {
+        return {
+          durationMs,
+          easing: "cubic-bezier(0.2, 1, 0.34, 1)",
+          fromTransform: "translate(14px, 12px) scale(0.97)",
+          toTransform: "translate(0, 0) scale(1)"
+        };
+      }
+      if (preset === "stretch") {
+        return {
+          durationMs,
+          easing: "cubic-bezier(0.2, 1.08, 0.3, 1)",
+          fromTransform: "translateY(6px) scale(1.08, 0.82)",
+          toTransform: "translateY(0) scale(1, 1)"
+        };
+      }
+      return {
+        durationMs,
+        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+        fromTransform: "translateY(10px) scale(0.985)",
+        toTransform: "translateY(0) scale(1)"
+      };
+    }
+
     function applyRowStyles(row) {
       const profile = getCurrentModeProfile();
       const isIdentityRightAligned = profile.identityAlign === "right";
       const fontSizePx = profile.fontSizePx;
+      const inlineAssetSizePx = Math.max(1, Math.round(Number(fontSizePx) || 22));
       const avatarSizePx = profile.avatarSizePx;
       const strokePx = profile.strokePx;
       const avatar = row.querySelector(".yt-chat-overlay-avatar");
@@ -253,6 +381,7 @@
         const fallbackAuthorColor =
           row.dataset.accentColor || (typeInfo.text && typeInfo.text.fallbackColor) || "#ffffff";
         const isMemberAuthor = row.dataset.authorMembership === "member";
+        author.textContent = resolveAuthorTextForRow(row, profile);
         author.style.color = isMemberAuthor
           ? profile.authorNameColorMember || fallbackAuthorColor
           : profile.authorNameColorNonMember || fallbackAuthorColor;
@@ -277,9 +406,8 @@
       }
 
       for (const badgeIcon of row.querySelectorAll(".yt-chat-overlay-badge-icon")) {
-        const badgeSize = Math.max(14, Math.round(fontSizePx * 0.9));
-        badgeIcon.style.width = `${badgeSize}px`;
-        badgeIcon.style.height = `${badgeSize}px`;
+        badgeIcon.style.width = `${inlineAssetSizePx}px`;
+        badgeIcon.style.height = `${inlineAssetSizePx}px`;
         badgeIcon.style.objectFit = "contain";
         badgeIcon.style.verticalAlign = "middle";
       }
@@ -288,8 +416,8 @@
         badgeLabel.style.display = "inline-flex";
         badgeLabel.style.alignItems = "center";
         badgeLabel.style.justifyContent = "center";
-        badgeLabel.style.minWidth = `${Math.max(14, Math.round(fontSizePx * 0.85))}px`;
-        badgeLabel.style.height = `${Math.max(14, Math.round(fontSizePx * 0.85))}px`;
+        badgeLabel.style.minWidth = `${inlineAssetSizePx}px`;
+        badgeLabel.style.height = `${inlineAssetSizePx}px`;
         badgeLabel.style.padding = "0 4px";
         badgeLabel.style.borderRadius = "999px";
         badgeLabel.style.background = "rgba(255, 255, 255, 0.22)";
@@ -319,10 +447,9 @@
       }
 
       for (const emoji of row.querySelectorAll(".yt-chat-overlay-inline-emoji")) {
-        const emojiSize = Math.max(16, Math.round(fontSizePx * 1.08));
-        emoji.style.width = `${emojiSize}px`;
-        emoji.style.height = `${emojiSize}px`;
-        emoji.style.minWidth = `${emojiSize}px`;
+        emoji.style.width = `${inlineAssetSizePx}px`;
+        emoji.style.height = `${inlineAssetSizePx}px`;
+        emoji.style.minWidth = `${inlineAssetSizePx}px`;
         emoji.style.objectFit = "contain";
         emoji.style.verticalAlign = "text-bottom";
         emoji.style.margin = "0 0.08em";
@@ -341,12 +468,16 @@
       row.dataset.accentColor = message.accentColor || "";
       row.dataset.authorMembership =
         message.isMember === true || message.type === "membership" ? "member" : "non-member";
-      
-      // 下方向から自然に現れるフェードイン
+      row.dataset.authorHandle = String(message.authorHandle || message.authorName || "system");
+      row.dataset.authorDisplayName = String(
+        message.authorDisplayName || message.authorName || row.dataset.authorHandle || "system"
+      );
+      const animationSpec = getFadeInAnimationSpec(getCurrentModeProfile());
+
       row.style.opacity = "0";
-      row.style.transform = "translateY(10px) scale(0.985)";
+      row.style.transform = animationSpec.fromTransform;
       row.style.transition =
-        "opacity 360ms cubic-bezier(0.22, 1, 0.36, 1), transform 360ms cubic-bezier(0.22, 1, 0.36, 1)";
+        `opacity ${animationSpec.durationMs}ms ${animationSpec.easing}, transform ${animationSpec.durationMs}ms ${animationSpec.easing}`;
 
       const avatar = createAvatarNode(message);
       row.appendChild(avatar);
@@ -359,7 +490,7 @@
 
       const author = document.createElement("span");
       author.className = "yt-chat-overlay-author";
-      author.textContent = `@${message.authorName || "system"}`;
+      author.textContent = resolveAuthorTextForRow(row, getCurrentModeProfile());
       authorMeta.appendChild(author);
 
       const badges = createBadgeWrap(message.authorBadges);
@@ -380,7 +511,7 @@
       window.requestAnimationFrame(() => {
         applyRowStyles(row);
         row.style.opacity = "1";
-        row.style.transform = "translateY(0) scale(1)";
+        row.style.transform = animationSpec.toTransform;
       });
 
       return row;

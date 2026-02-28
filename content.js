@@ -22,6 +22,8 @@
    * @property {string} id
    * @property {string} type
    * @property {string} authorName
+   * @property {string} authorHandle
+   * @property {string} authorDisplayName
    * @property {string} authorAvatarUrl
    * @property {string} text
    * @property {OverlayMessageRun[]} messageRuns
@@ -36,6 +38,7 @@
    * @typedef {Object} OverlayModeProfile
    * @property {number} maxVisible
    * @property {"timer"|"overflow"} fadeOutTrigger
+   * @property {"soft-rise"|"slide"|"slide-reverse"|"pop"|"zoom"|"flip"|"float"|"stretch"} animationPreset
    * @property {number} ttlMs
    * @property {number} fadeMs
    * @property {number} sequentialFadeSec
@@ -56,6 +59,7 @@
    * @property {number} messageBgOpacity
    * @property {boolean} showAvatar
    * @property {boolean} showAuthorName
+   * @property {"handle"|"display-name"} authorNameMode
    * @property {string} authorNameColorMember
    * @property {string} authorNameColorNonMember
    * @property {string} commentTextColor
@@ -69,6 +73,7 @@
    * @property {{open: {fullscreen: OverlayModeProfile, theater: OverlayModeProfile, normal: OverlayModeProfile}, closed: {fullscreen: OverlayModeProfile, theater: OverlayModeProfile, normal: OverlayModeProfile}}} panelModeProfiles
    * @property {number} maxVisible
    * @property {"timer"|"overflow"} fadeOutTrigger
+   * @property {"soft-rise"|"slide"|"slide-reverse"|"pop"|"zoom"|"flip"|"float"|"stretch"} animationPreset
    * @property {number} ttlMs
    * @property {number} fadeMs
    * @property {number} sequentialFadeSec
@@ -89,6 +94,7 @@
    * @property {number} messageBgOpacity
    * @property {boolean} showAvatar
    * @property {boolean} showAuthorName
+   * @property {"handle"|"display-name"} authorNameMode
    * @property {string} authorNameColorMember
    * @property {string} authorNameColorNonMember
    * @property {string} commentTextColor
@@ -206,7 +212,10 @@
     flushRaf: 0,
     syncRaf: 0,
     storageSnapshot: "null",
-    storageSyncTimer: 0
+    storageSyncTimer: 0,
+    youtubeApiKey: "",
+    channelNameCache: new Map(),
+    channelNameFetchQueue: new Map()
   };
 
   let parserApi = null;
@@ -250,7 +259,8 @@
 
     rendererApi = createRenderer({
       typeInfo: TYPE_INFO,
-      getCurrentModeProfile
+      getCurrentModeProfile,
+      hasYoutubeApiKey: () => Boolean(state.youtubeApiKey)
     });
     return rendererApi;
   }
@@ -352,6 +362,7 @@
         const rawConfig = result ? result[STORAGE_KEY] : null;
         state.storageSnapshot = serializeStorageValue(rawConfig);
         state.config = normalizeConfig(rawConfig);
+        updateYoutubeApiKey(rawConfig && rawConfig.youtubeApiKey);
         resolve();
       });
     });
@@ -375,6 +386,7 @@
         }
         state.storageSnapshot = nextSnapshot;
         state.config = normalizeConfig(rawConfig);
+        updateYoutubeApiKey(rawConfig && rawConfig.youtubeApiKey);
         applyConfigChange();
       });
     } catch (e) {
@@ -416,6 +428,7 @@
         const change = changes[STORAGE_KEY];
         state.storageSnapshot = serializeStorageValue(change ? change.newValue : null);
         state.config = normalizeConfig(change ? change.newValue : null);
+        updateYoutubeApiKey(change && change.newValue && change.newValue.youtubeApiKey);
         applyConfigChange();
       });
     } catch (e) {
@@ -548,8 +561,89 @@
     messageFlowApi.markSeenId(id);
   }
 
+  function normalizeComparableAuthorName(name) {
+    return String(name || "")
+      .replace(/^@+/, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  }
+
+  function normalizeAuthorDisplayName(name) {
+    return String(name || "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function isLikelyAuthorHandle(handle) {
+    const normalized = String(handle || "")
+      .replace(/^@+/, "")
+      .trim();
+    if (!normalized) {
+      return false;
+    }
+    if (/^system$/i.test(normalized)) {
+      return false;
+    }
+    if (/\s/.test(normalized)) {
+      return false;
+    }
+    return true;
+  }
+
+  function shouldResolveMessageAuthorDisplayName(message) {
+    if (!state.isActive || !message || !message.id) {
+      return false;
+    }
+
+    const profile = getCurrentModeProfile();
+    const requestedMode = profile && profile.authorNameMode;
+    if (getEffectiveAuthorNameMode(requestedMode) !== "display-name") {
+      return false;
+    }
+
+    const handle = String(message.authorHandle || message.authorName || "").trim();
+    if (!isLikelyAuthorHandle(handle)) {
+      return false;
+    }
+
+    const displayName = normalizeAuthorDisplayName(message.authorDisplayName);
+    if (!displayName) {
+      return true;
+    }
+
+    return normalizeComparableAuthorName(displayName) === normalizeComparableAuthorName(handle);
+  }
+
+  function resolveMessageAuthorDisplayName(message) {
+    if (!shouldResolveMessageAuthorDisplayName(message)) {
+      return;
+    }
+
+    const handle = String(message.authorHandle || message.authorName || "").trim();
+    fetchChannelNameFromApi(handle)
+      .then((channelName) => {
+        const normalizedChannelName = normalizeAuthorDisplayName(channelName);
+        if (!normalizedChannelName) {
+          return;
+        }
+
+        message.authorDisplayName = normalizedChannelName;
+        if (
+          messageFlowApi &&
+          typeof messageFlowApi.updateMessageAuthorDisplayName === "function"
+        ) {
+          messageFlowApi.updateMessageAuthorDisplayName(message.id, normalizedChannelName);
+        }
+      })
+      .catch(() => {
+        // fetchChannelNameFromApi 側でログを出すため、ここでは握りつぶす。
+      });
+  }
+
   function enqueueMessage(message) {
     messageFlowApi.enqueueMessage(message);
+    resolveMessageAuthorDisplayName(message);
   }
 
   function syncEditDummyRows() {
@@ -701,4 +795,88 @@
   }
 
   initialize();
+
+  // YouTube Data API からチャンネル表示名を取得
+  async function fetchChannelNameFromApi(handle) {
+    const apiKey = state.youtubeApiKey;
+    if (!apiKey || !handle) {
+      return null;
+    }
+
+    const cleanHandle = handle.startsWith("@") ? handle.slice(1) : handle;
+    const cacheKey = cleanHandle.toLowerCase();
+
+    // キャッシュチェック
+    if (state.channelNameCache.has(cacheKey)) {
+      return state.channelNameCache.get(cacheKey);
+    }
+
+    // 進行中のリクエストがあればそれを返す
+    if (state.channelNameFetchQueue.has(cacheKey)) {
+      return state.channelNameFetchQueue.get(cacheKey);
+    }
+
+    const fetchPromise = (async () => {
+      try {
+        // forHandle パラメータで検索
+        const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet&forHandle=${encodeURIComponent(cleanHandle)}&key=${encodeURIComponent(apiKey)}`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          if (response.status === 403 || response.status === 401) {
+            console.warn("[yt-chat-overlay] YouTube API key invalid or quota exceeded");
+          }
+          return null;
+        }
+
+        const data = await response.json();
+        if (data.items && data.items.length > 0) {
+          const channelName = data.items[0].snippet?.title;
+          if (channelName) {
+            state.channelNameCache.set(cacheKey, channelName);
+            return channelName;
+          }
+        }
+        return null;
+      } catch (error) {
+        console.warn("[yt-chat-overlay] Failed to fetch channel name:", error);
+        return null;
+      } finally {
+        state.channelNameFetchQueue.delete(cacheKey);
+      }
+    })();
+
+    state.channelNameFetchQueue.set(cacheKey, fetchPromise);
+    return fetchPromise;
+  }
+
+  // APIキーに基づいて実際の authorNameMode を取得
+  function getEffectiveAuthorNameMode(requestedMode) {
+    const hasApiKey = Boolean(state.youtubeApiKey);
+    if (requestedMode === "display-name" && !hasApiKey) {
+      return "handle";
+    }
+    return requestedMode === "display-name" ? "display-name" : "handle";
+  }
+
+  // APIキー更新時の処理
+  function updateYoutubeApiKey(apiKey) {
+    const newKey = String(apiKey || "").trim();
+    const oldKey = state.youtubeApiKey;
+    state.youtubeApiKey = newKey;
+    
+    // APIキーが変更されたらキャッシュをクリア
+    if (newKey !== oldKey) {
+      state.channelNameCache.clear();
+      state.channelNameFetchQueue.clear();
+    }
+  }
+
+  // content.js 内で公開（renderer などから呼び出せるように）
+  window.YTChatOverlayContent = {
+    fetchChannelNameFromApi,
+    getEffectiveAuthorNameMode,
+    updateYoutubeApiKey,
+    get state() { return state; }
+  };
 })();

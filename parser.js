@@ -260,23 +260,153 @@
       return "";
     }
 
-    function normalizeAuthorName(name) {
+    function normalizeAuthorHandle(name) {
       const normalized = String(name || "")
         .replace(/^@+/, "")
         .trim();
       return normalized || "system";
     }
 
+    function normalizeDisplayName(name) {
+      return String(name || "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function toComparableAuthorName(name) {
+      return normalizeDisplayName(name)
+        .replace(/^@+/, "")
+        .toLowerCase();
+    }
+
+    function extractDisplayNameCandidate(rawValue, authorHandle) {
+      const value = normalizeDisplayName(rawValue);
+      if (!value) {
+        return "";
+      }
+
+      const comparableValue = toComparableAuthorName(value);
+      if (!comparableValue) {
+        return "";
+      }
+
+      if (authorHandle && comparableValue === toComparableAuthorName(authorHandle)) {
+        return "";
+      }
+
+      return value;
+    }
+
+    function readAuthorNameFromDataPayload(payload) {
+      if (!payload || typeof payload !== "object") {
+        return "";
+      }
+
+      const authorName = payload.authorName;
+      if (authorName && typeof authorName === "object") {
+        if (typeof authorName.simpleText === "string" && authorName.simpleText.trim()) {
+          return authorName.simpleText;
+        }
+        if (Array.isArray(authorName.runs)) {
+          const runText = authorName.runs
+            .map((run) => (run && typeof run.text === "string" ? run.text : ""))
+            .join("")
+            .trim();
+          if (runText) {
+            return runText;
+          }
+        }
+      }
+
+      if (typeof payload.authorDisplayName === "string" && payload.authorDisplayName.trim()) {
+        return payload.authorDisplayName;
+      }
+
+      if (typeof payload.authorNameText === "string" && payload.authorNameText.trim()) {
+        return payload.authorNameText;
+      }
+
+      const authorDetails =
+        payload.authorDetails && typeof payload.authorDetails === "object"
+          ? payload.authorDetails
+          : null;
+      if (authorDetails && typeof authorDetails.displayName === "string") {
+        const value = authorDetails.displayName.trim();
+        if (value) {
+          return value;
+        }
+      }
+
+      return "";
+    }
+
+    function resolveDataDisplayName(renderer, authorHandle) {
+      const candidates = [
+        renderer ? renderer.data : null,
+        renderer && renderer.__data && typeof renderer.__data === "object"
+          ? renderer.__data.data
+          : null,
+        renderer ? renderer.__data : null,
+        renderer && renderer.polymerController ? renderer.polymerController.data : null,
+        renderer && renderer.polymerController ? renderer.polymerController.hostData : null,
+        renderer && renderer.inst ? renderer.inst.data : null
+      ];
+
+      for (const candidate of candidates) {
+        const raw = readAuthorNameFromDataPayload(candidate);
+        const resolved = extractDisplayNameCandidate(raw, authorHandle);
+        if (resolved) {
+          return resolved;
+        }
+      }
+
+      return "";
+    }
+
     function isSystemAuthorName(name) {
       return /^system$/i.test(String(name || "").trim());
     }
 
-    function resolveAuthorName(renderer) {
-      return normalizeAuthorName(
+    function resolveAuthorIdentity(renderer) {
+      const authorNode = renderer.querySelector("#author-name, .author-name");
+      const authorNodeText =
+        extractText(authorNode) ||
         extractText(renderer.querySelector("#author-name")) ||
-          extractText(renderer.querySelector(".author-name")) ||
-          "system"
-      );
+        extractText(renderer.querySelector(".author-name"));
+      const authorHandle = normalizeAuthorHandle(authorNodeText || "system");
+
+      const displayCandidates = [
+        resolveDataDisplayName(renderer, authorHandle),
+        renderer.getAttribute("author-name"),
+        renderer.getAttribute("data-author-name"),
+        renderer.getAttribute("author-display-name"),
+        renderer.getAttribute("data-author-display-name"),
+        authorNode ? authorNode.getAttribute("title") : "",
+        authorNode ? authorNode.getAttribute("aria-label") : "",
+        authorNode ? authorNode.getAttribute("data-name") : "",
+        authorNode ? authorNode.getAttribute("data-author-name") : ""
+      ];
+
+      let displayName = "";
+      for (const candidate of displayCandidates) {
+        const resolved = extractDisplayNameCandidate(candidate, authorHandle);
+        if (resolved) {
+          displayName = resolved;
+          break;
+        }
+      }
+
+      if (!displayName) {
+        const resolved = extractDisplayNameCandidate(authorNodeText, authorHandle);
+        if (resolved) {
+          displayName = resolved;
+        }
+      }
+
+      return {
+        authorHandle,
+        authorDisplayName: displayName
+      };
     }
 
     function resolveAvatarUrl(renderer) {
@@ -722,7 +852,8 @@
         return null;
       }
 
-      const authorName = resolveAuthorName(parseTarget);
+      const authorIdentity = resolveAuthorIdentity(parseTarget);
+      const authorName = authorIdentity.authorHandle;
       if (type === "text" && isSystemAuthorName(authorName)) {
         return null;
       }
@@ -747,6 +878,8 @@
         id,
         type,
         authorName,
+        authorHandle: authorIdentity.authorHandle,
+        authorDisplayName: authorIdentity.authorDisplayName,
         authorAvatarUrl: resolveAvatarUrl(parseTarget),
         text,
         messageRuns,

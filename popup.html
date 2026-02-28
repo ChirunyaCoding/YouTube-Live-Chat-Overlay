@@ -251,7 +251,7 @@
                       <circle cx="12" cy="8" r="5"/>
                       <path d="M20 21a8 8 0 0 0-16 0"/>
                     </svg>
-                    アバターを表示
+                    アバターを表示（全設定共通）
                   </span>
                   <div class="toggle-switch">
                     <input id="showAvatar" type="checkbox" />
@@ -265,13 +265,27 @@
                       <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
                       <circle cx="12" cy="7" r="4"/>
                     </svg>
-                    名前（@xxx）を表示
+                    名前を表示（全設定共通）
                   </span>
                   <div class="toggle-switch">
                     <input id="showAuthorName" type="checkbox" />
                     <span class="slider"></span>
                   </div>
                 </label>
+
+                <div class="field-row" style="margin-top: 12px;">
+                  <label for="authorNameMode">名前の表示形式</label>
+                  <select id="authorNameMode">
+                    <option value="handle">ハンドル（@xxx）</option>
+                    <option value="display-name">チャンネル名（API使用）</option>
+                  </select>
+                </div>
+
+                <div class="field-row" style="margin-top: 12px;">
+                  <label for="youtubeApiKey">YouTube Data API キー</label>
+                  <input id="youtubeApiKey" type="password" placeholder="APIキーがない場合はハンドル表示になります" style="flex: 1; font-family: monospace;" />
+                </div>
+                <p class="hint" style="margin-top: 4px; margin-left: 140px;">チャンネル名表示には YouTube Data API キーが必要です。<a href="https://developers.google.com/youtube/registering_an_application?hl=ja" target="_blank">取得方法</a></p>
 
                 <div class="field-row" style="margin-top: 12px;">
                   <label for="identityAlign">アイコン・名前の位置</label>
@@ -423,26 +437,39 @@
                 </div>
                 
                 <div class="field-row">
-                  <label for="maxVisible">最大表示件数</label>
+                  <label for="maxVisible">最大表示件数（モードごと）</label>
                   <input id="maxVisible" type="number" min="1" max="20" step="1" />
                 </div>
                 <div class="field-row">
-                  <label for="fadeOutTrigger">フェードアウト条件</label>
+                  <label for="fadeOutTrigger">フェードアウト条件（全設定共通）</label>
                   <select id="fadeOutTrigger">
                     <option value="timer">表示時間でフェード</option>
                     <option value="overflow">上限到達時にフェード</option>
                   </select>
                 </div>
                 <div class="field-row">
-                  <label for="ttlMs">表示時間 (ms)</label>
+                  <label for="animationPreset">アニメーション種類（全設定共通）</label>
+                  <select id="animationPreset">
+                    <option value="soft-rise">ソフト（下から）</option>
+                    <option value="slide">スライド</option>
+                    <option value="slide-reverse">スライド（逆方向）</option>
+                    <option value="pop">ポップ</option>
+                    <option value="zoom">ズーム</option>
+                    <option value="flip">フリップ</option>
+                    <option value="float">フロート</option>
+                    <option value="stretch">ストレッチ</option>
+                  </select>
+                </div>
+                <div class="field-row">
+                  <label for="ttlMs">表示時間 (ms)（全設定共通）</label>
                   <input id="ttlMs" type="number" min="1000" max="30000" step="100" />
                 </div>
                 <div class="field-row">
-                  <label for="fadeMs">フェード時間 (ms)</label>
+                  <label for="fadeMs">フェード時間 (ms)（全設定共通）</label>
                   <input id="fadeMs" type="number" min="0" max="2000" step="10" />
                 </div>
                 <div class="field-row">
-                  <label for="sequentialFadeSec">連続フェード間隔 (秒)</label>
+                  <label for="sequentialFadeSec">連続フェード間隔 (秒)（全設定共通）</label>
                   <input id="sequentialFadeSec" type="number" min="0" max="10" step="0.1" />
                 </div>
               </section>

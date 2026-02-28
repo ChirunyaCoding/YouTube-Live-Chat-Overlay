@@ -15,6 +15,7 @@
         : () => ({
             maxVisible: 8,
             fadeOutTrigger: "timer",
+            animationPreset: "soft-rise",
             ttlMs: 9000,
             fadeMs: 300,
             sequentialFadeSec: 0.3,
@@ -33,6 +34,16 @@
     const FLOW_SURGE_WINDOW_MS = 3000;
     const FLOW_SURGE_THRESHOLD = 8;
     const FLOW_SURGE_HOLD_MS = 7000;
+    const ANIMATION_PRESET_SET = new Set([
+      "soft-rise",
+      "slide",
+      "slide-reverse",
+      "pop",
+      "zoom",
+      "flip",
+      "float",
+      "stretch"
+    ]);
     const flowSurgeState = {
       arrivalTimes: [],
       forcedOverflowActive: false,
@@ -124,6 +135,61 @@
       flowSurgeState.forcedOverflowActive = false;
       flowSurgeState.forcedOverflowUntilMs = 0;
       clearForcedOverflowReleaseTimer();
+    }
+
+    function normalizeAnimationPreset(value) {
+      return ANIMATION_PRESET_SET.has(value) ? value : "soft-rise";
+    }
+
+    function getFadeOutAnimationSpec(profile) {
+      const fontSizePx = Math.max(12, Number(profile && profile.fontSizePx) || 22);
+      const preset = normalizeAnimationPreset(profile && profile.animationPreset);
+      if (preset === "slide") {
+        return {
+          easing: "cubic-bezier(0.4, 0, 1, 1)",
+          transform: `translateX(-${Math.max(20, Math.round(fontSizePx * 1.1))}px) scale(1)`
+        };
+      }
+      if (preset === "slide-reverse") {
+        return {
+          easing: "cubic-bezier(0.4, 0, 1, 1)",
+          transform: `translateX(${Math.max(20, Math.round(fontSizePx * 1.1))}px) scale(1)`
+        };
+      }
+      if (preset === "pop") {
+        return {
+          easing: "cubic-bezier(0.4, 0, 1, 1)",
+          transform: `translateY(-${Math.max(6, Math.round(fontSizePx * 0.2))}px) scale(1.06)`
+        };
+      }
+      if (preset === "zoom") {
+        return {
+          easing: "cubic-bezier(0.4, 0, 1, 1)",
+          transform: `translateY(-${Math.max(6, Math.round(fontSizePx * 0.2))}px) scale(0.86)`
+        };
+      }
+      if (preset === "flip") {
+        return {
+          easing: "cubic-bezier(0.4, 0, 1, 1)",
+          transform: `translateY(-${Math.max(6, Math.round(fontSizePx * 0.22))}px) rotate(7deg) scale(0.88)`
+        };
+      }
+      if (preset === "float") {
+        return {
+          easing: "cubic-bezier(0.4, 0, 1, 1)",
+          transform: `translate(${Math.max(8, Math.round(fontSizePx * 0.45))}px, -${Math.max(8, Math.round(fontSizePx * 0.45))}px) scale(0.96)`
+        };
+      }
+      if (preset === "stretch") {
+        return {
+          easing: "cubic-bezier(0.4, 0, 1, 1)",
+          transform: `translateY(-${Math.max(4, Math.round(fontSizePx * 0.18))}px) scale(0.82, 1.06)`
+        };
+      }
+      return {
+        easing: "cubic-bezier(0.4, 0, 1, 1)",
+        transform: `translateY(-${Math.max(8, Math.round(fontSizePx * 0.35))}px) scale(0.98)`
+      };
     }
 
     function clearExpiredQueue() {
@@ -220,6 +286,51 @@
         }
         state.messageHistoryMap.delete(expiredId);
       }
+    }
+
+    function normalizeAuthorDisplayName(name) {
+      return String(name || "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function updateMessageAuthorDisplayName(messageId, authorDisplayName) {
+      const normalizedMessageId = String(messageId || "").trim();
+      const normalizedDisplayName = normalizeAuthorDisplayName(authorDisplayName);
+      if (!normalizedMessageId || !normalizedDisplayName) {
+        return false;
+      }
+
+      let updated = false;
+
+      const historyMessage = state.messageHistoryMap.get(normalizedMessageId);
+      if (historyMessage && historyMessage.authorDisplayName !== normalizedDisplayName) {
+        historyMessage.authorDisplayName = normalizedDisplayName;
+        updated = true;
+      }
+
+      for (const queuedMessage of state.renderQueue) {
+        if (!queuedMessage || queuedMessage.id !== normalizedMessageId) {
+          continue;
+        }
+        if (queuedMessage.authorDisplayName !== normalizedDisplayName) {
+          queuedMessage.authorDisplayName = normalizedDisplayName;
+          updated = true;
+        }
+      }
+
+      const row = state.messageNodes.get(normalizedMessageId);
+      if (row && row.dataset && row.dataset.authorDisplayName !== normalizedDisplayName) {
+        row.dataset.authorDisplayName = normalizedDisplayName;
+        const renderer = getRendererApi();
+        if (renderer && typeof renderer.updateRows === "function") {
+          renderer.updateRows([row]);
+        }
+        syncDragOverlayLayout();
+        updated = true;
+      }
+
+      return updated;
     }
 
     function queueMessageRemoval(messageId, immediate) {
@@ -655,13 +766,10 @@
 
       const profile = getCurrentModeProfile();
       const fadeMs = profile.fadeMs;
-      
-      // 斜め移動を避け、上方向へわずかに抜ける自然なフェードアウト
-      const fadeShiftY = -Math.max(8, Math.round(profile.fontSizePx * 0.35));
-
-      node.style.transition = `opacity ${fadeMs}ms cubic-bezier(0.4, 0, 1, 1), transform ${fadeMs}ms cubic-bezier(0.4, 0, 1, 1)`;
+      const fadeOut = getFadeOutAnimationSpec(profile);
+      node.style.transition = `opacity ${fadeMs}ms ${fadeOut.easing}, transform ${fadeMs}ms ${fadeOut.easing}`;
       node.style.opacity = "0";
-      node.style.transform = `translateY(${fadeShiftY}px) scale(0.98)`;
+      node.style.transform = fadeOut.transform;
 
       window.setTimeout(() => {
         if (node.parentNode) {
@@ -699,6 +807,7 @@
     return {
       markSeenId,
       enqueueMessage,
+      updateMessageAuthorDisplayName,
       syncEditDummyRows,
       restoreVisibleMessagesFromHistory,
       revealHistoryDuringDrag,

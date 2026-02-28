@@ -9,6 +9,16 @@
   const EDIT_DUMMY_ID_PREFIX = "__yt_edit_dummy__";
   const OFFSET_MAX_X_BASE = 1920;
   const OFFSET_MAX_Y_BASE = 1080;
+  const ANIMATION_PRESETS = [
+    "soft-rise",
+    "slide",
+    "slide-reverse",
+    "pop",
+    "zoom",
+    "flip",
+    "float",
+    "stretch"
+  ];
   const OVERLAY_ROOT_ID = "yt-chat-overlay-root";
   const OVERLAY_LANE_ID = "yt-chat-overlay-lane";
 
@@ -64,6 +74,7 @@
   const DEFAULT_MODE_PROFILE = {
     maxVisible: 8,
     fadeOutTrigger: "timer",
+    animationPreset: "soft-rise",
     ttlMs: 9000,
     fadeMs: 300,
     sequentialFadeSec: 0.3,
@@ -90,6 +101,7 @@
     messageBgOpacity: 0.28,
     showAvatar: true,
     showAuthorName: true,
+    authorNameMode: "handle",
     authorNameColorMember: "#4facfe",
     authorNameColorNonMember: "#2bc963",
     commentTextColor: "#ffffff"
@@ -145,6 +157,7 @@
     panelModeProfiles: createPanelModeProfiles(DEFAULT_MODE_PROFILE),
     maxVisible: DEFAULT_MODE_PROFILE.maxVisible,
     fadeOutTrigger: DEFAULT_MODE_PROFILE.fadeOutTrigger,
+    animationPreset: DEFAULT_MODE_PROFILE.animationPreset,
     ttlMs: DEFAULT_MODE_PROFILE.ttlMs,
     fadeMs: DEFAULT_MODE_PROFILE.fadeMs,
     sequentialFadeSec: DEFAULT_MODE_PROFILE.sequentialFadeSec,
@@ -165,6 +178,7 @@
     messageBgOpacity: DEFAULT_MODE_PROFILE.messageBgOpacity,
     showAvatar: DEFAULT_MODE_PROFILE.showAvatar,
     showAuthorName: DEFAULT_MODE_PROFILE.showAuthorName,
+    authorNameMode: DEFAULT_MODE_PROFILE.authorNameMode,
     authorNameColorMember: DEFAULT_MODE_PROFILE.authorNameColorMember,
     authorNameColorNonMember: DEFAULT_MODE_PROFILE.authorNameColorNonMember,
     commentTextColor: DEFAULT_MODE_PROFILE.commentTextColor
@@ -201,6 +215,14 @@
     return `#${hex.toLowerCase()}`;
   }
 
+  function normalizeAnimationPreset(value, fallback) {
+    return ANIMATION_PRESETS.includes(value) ? value : fallback;
+  }
+
+  function normalizeAuthorNameMode(value, fallback) {
+    return value === "display-name" || value === "handle" ? value : fallback;
+  }
+
   function normalizeModeProfile(rawProfile, fallbackProfile) {
     const input = rawProfile && typeof rawProfile === "object" ? rawProfile : {};
     const fallback =
@@ -219,6 +241,8 @@
         : input.fadeOutTrigger === "timer"
           ? "timer"
           : fallback.fadeOutTrigger;
+    const animationPreset = normalizeAnimationPreset(input.animationPreset, fallback.animationPreset);
+    const authorNameMode = normalizeAuthorNameMode(input.authorNameMode, fallback.authorNameMode);
     const verticalAlign =
       input.verticalAlign === "top"
         ? "top"
@@ -293,6 +317,7 @@
     return {
       maxVisible: Math.round(clampNumber(input.maxVisible, 1, 20, fallback.maxVisible)),
       fadeOutTrigger,
+      animationPreset,
       ttlMs: Math.round(clampNumber(input.ttlMs, 1000, 30000, fallback.ttlMs)),
       fadeMs: Math.round(clampNumber(input.fadeMs, 0, 2000, fallback.fadeMs)),
       sequentialFadeSec: clampNumber(
@@ -329,6 +354,7 @@
         typeof input.showAuthorName === "boolean"
           ? input.showAuthorName
           : fallback.showAuthorName,
+      authorNameMode,
       authorNameColorMember: normalizeColor(
         input.authorNameColorMember,
         normalizeColor(fallback.authorNameColorMember, DEFAULT_MODE_PROFILE.authorNameColorMember)
@@ -489,6 +515,22 @@
         : input.fadeOutTrigger === "timer"
           ? "timer"
           : panelModeProfiles.closed.fullscreen.fadeOutTrigger;
+    const sharedAnimationPreset = normalizeAnimationPreset(
+      input.animationPreset,
+      panelModeProfiles.closed.fullscreen.animationPreset
+    );
+    const sharedAuthorNameMode = normalizeAuthorNameMode(
+      input.authorNameMode,
+      panelModeProfiles.closed.fullscreen.authorNameMode
+    );
+    const sharedShowAvatar =
+      typeof input.showAvatar === "boolean"
+        ? input.showAvatar
+        : panelModeProfiles.closed.fullscreen.showAvatar;
+    const sharedShowAuthorName =
+      typeof input.showAuthorName === "boolean"
+        ? input.showAuthorName
+        : panelModeProfiles.closed.fullscreen.showAuthorName;
     for (const panelState of PANEL_STATE_KEYS) {
       for (const mode of MODE_KEYS) {
         panelModeProfiles[panelState][mode].authorNameColorMember =
@@ -497,6 +539,30 @@
           sharedAuthorNameColorNonMember;
         panelModeProfiles[panelState][mode].commentTextColor = sharedCommentTextColor;
         panelModeProfiles[panelState][mode].fadeOutTrigger = sharedFadeOutTrigger;
+        panelModeProfiles[panelState][mode].animationPreset = sharedAnimationPreset;
+        panelModeProfiles[panelState][mode].authorNameMode = sharedAuthorNameMode;
+        panelModeProfiles[panelState][mode].showAvatar = sharedShowAvatar;
+        panelModeProfiles[panelState][mode].showAuthorName = sharedShowAuthorName;
+      }
+    }
+
+    const sharedTtlMs = Math.round(
+      clampNumber(input.ttlMs, 1000, 30000, panelModeProfiles.closed.fullscreen.ttlMs)
+    );
+    const sharedFadeMs = Math.round(
+      clampNumber(input.fadeMs, 0, 2000, panelModeProfiles.closed.fullscreen.fadeMs)
+    );
+    const sharedSequentialFadeSec = clampNumber(
+      input.sequentialFadeSec,
+      0,
+      10,
+      panelModeProfiles.closed.fullscreen.sequentialFadeSec
+    );
+    for (const panelState of PANEL_STATE_KEYS) {
+      for (const mode of MODE_KEYS) {
+        panelModeProfiles[panelState][mode].ttlMs = sharedTtlMs;
+        panelModeProfiles[panelState][mode].fadeMs = sharedFadeMs;
+        panelModeProfiles[panelState][mode].sequentialFadeSec = sharedSequentialFadeSec;
       }
     }
 
@@ -616,6 +682,7 @@
       panelModeProfiles,
       maxVisible: panelModeProfiles.closed.fullscreen.maxVisible,
       fadeOutTrigger: panelModeProfiles.closed.fullscreen.fadeOutTrigger,
+      animationPreset: panelModeProfiles.closed.fullscreen.animationPreset,
       ttlMs: panelModeProfiles.closed.fullscreen.ttlMs,
       fadeMs: panelModeProfiles.closed.fullscreen.fadeMs,
       sequentialFadeSec: panelModeProfiles.closed.fullscreen.sequentialFadeSec,
@@ -636,6 +703,7 @@
       messageBgOpacity: panelModeProfiles.closed.fullscreen.messageBgOpacity,
       showAvatar: panelModeProfiles.closed.fullscreen.showAvatar,
       showAuthorName: panelModeProfiles.closed.fullscreen.showAuthorName,
+      authorNameMode: panelModeProfiles.closed.fullscreen.authorNameMode,
       authorNameColorMember: panelModeProfiles.closed.fullscreen.authorNameColorMember,
       authorNameColorNonMember: panelModeProfiles.closed.fullscreen.authorNameColorNonMember,
       commentTextColor: panelModeProfiles.closed.fullscreen.commentTextColor

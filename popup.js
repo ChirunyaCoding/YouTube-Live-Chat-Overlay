@@ -6,10 +6,21 @@
   const PANEL_STATE_KEYS = ["closed", "open"];
   const OFFSET_MAX_X_BASE = 1920;
   const OFFSET_MAX_Y_BASE = 1080;
+  const ANIMATION_PRESETS = [
+    "soft-rise",
+    "slide",
+    "slide-reverse",
+    "pop",
+    "zoom",
+    "flip",
+    "float",
+    "stretch"
+  ];
 
   const DEFAULT_MODE_PROFILE = {
     maxVisible: 8,
     fadeOutTrigger: "timer",
+    animationPreset: "soft-rise",
     ttlMs: 9000,
     fadeMs: 300,
     sequentialFadeSec: 0.3,
@@ -36,6 +47,7 @@
     messageBgOpacity: 0.28,
     showAvatar: true,
     showAuthorName: true,
+    authorNameMode: "handle",
     authorNameColorMember: "#4facfe",
     authorNameColorNonMember: "#2bc963",
     commentTextColor: "#ffffff"
@@ -144,6 +156,14 @@
       values: ["timer", "overflow"],
       fallback: DEFAULT_MODE_PROFILE.fadeOutTrigger
     },
+    animationPreset: {
+      values: ANIMATION_PRESETS,
+      fallback: DEFAULT_MODE_PROFILE.animationPreset
+    },
+    authorNameMode: {
+      values: ["handle", "display-name"],
+      fallback: DEFAULT_MODE_PROFILE.authorNameMode
+    },
     horizontalAlign: {
       values: ["left", "right"],
       fallback: DEFAULT_MODE_PROFILE.horizontalAlign
@@ -182,12 +202,15 @@
     shareAnchorSettings: "anchorSettings"
   };
   const PROFILE_CHECKBOX_IDS = ["showAvatar", "showAuthorName"];
+  const SHARED_PROFILE_CHECKBOX_IDS = ["showAvatar", "showAuthorName"];
   const PROFILE_NUMERIC_IDS = Object.keys(NUMERIC_FIELDS);
   const PROFILE_SELECT_IDS = Object.keys(PROFILE_SELECT_FIELDS);
   const PROFILE_COLOR_IDS = Object.keys(COLOR_FIELDS);
   const SHARED_COLOR_IDS = PROFILE_COLOR_IDS;
+  const API_KEY_FIELD_ID = "youtubeApiKey";
   const SHARED_ANCHOR_FIELD_IDS = ["horizontalAlign", "verticalAlign", "identityAlign"];
-  const SHARED_BEHAVIOR_SELECT_IDS = ["fadeOutTrigger"];
+  const SHARED_BEHAVIOR_SELECT_IDS = ["fadeOutTrigger", "animationPreset", "authorNameMode"];
+  const ALWAYS_SHARED_ANIMATION_NUMERIC_IDS = ["ttlMs", "fadeMs", "sequentialFadeSec"];
   const SHARED_NUMERIC_FIELDS = {
     fontSizePx: "fontSizePx",
     rowGapPx: "rowGapPx",
@@ -265,6 +288,16 @@
     )
       ? input.fadeOutTrigger
       : fallback.fadeOutTrigger;
+    const animationPreset = PROFILE_SELECT_FIELDS.animationPreset.values.includes(
+      input.animationPreset
+    )
+      ? input.animationPreset
+      : fallback.animationPreset;
+    const authorNameMode = PROFILE_SELECT_FIELDS.authorNameMode.values.includes(
+      input.authorNameMode
+    )
+      ? input.authorNameMode
+      : fallback.authorNameMode;
 
     const verticalAlign = PROFILE_SELECT_FIELDS.verticalAlign.values.includes(
       input.verticalAlign
@@ -395,6 +428,8 @@
         NUMERIC_FIELDS.maxVisible.step
       ),
       fadeOutTrigger,
+      animationPreset,
+      authorNameMode,
       ttlMs: clampNumber(
         input.ttlMs,
         NUMERIC_FIELDS.ttlMs.min,
@@ -642,6 +677,24 @@
     )
       ? input.fadeOutTrigger
       : panelModeProfiles.closed.fullscreen.fadeOutTrigger;
+    const sharedAnimationPreset = PROFILE_SELECT_FIELDS.animationPreset.values.includes(
+      input.animationPreset
+    )
+      ? input.animationPreset
+      : panelModeProfiles.closed.fullscreen.animationPreset;
+    const sharedAuthorNameMode = PROFILE_SELECT_FIELDS.authorNameMode.values.includes(
+      input.authorNameMode
+    )
+      ? input.authorNameMode
+      : panelModeProfiles.closed.fullscreen.authorNameMode;
+    const sharedShowAvatar =
+      typeof input.showAvatar === "boolean"
+        ? input.showAvatar
+        : panelModeProfiles.closed.fullscreen.showAvatar;
+    const sharedShowAuthorName =
+      typeof input.showAuthorName === "boolean"
+        ? input.showAuthorName
+        : panelModeProfiles.closed.fullscreen.showAuthorName;
     for (const panelState of PANEL_STATE_KEYS) {
       for (const mode of MODE_KEYS) {
         panelModeProfiles[panelState][mode].authorNameColorMember =
@@ -650,6 +703,39 @@
           sharedAuthorNameColorNonMember;
         panelModeProfiles[panelState][mode].commentTextColor = sharedCommentTextColor;
         panelModeProfiles[panelState][mode].fadeOutTrigger = sharedFadeOutTrigger;
+        panelModeProfiles[panelState][mode].animationPreset = sharedAnimationPreset;
+        panelModeProfiles[panelState][mode].authorNameMode = sharedAuthorNameMode;
+        panelModeProfiles[panelState][mode].showAvatar = sharedShowAvatar;
+        panelModeProfiles[panelState][mode].showAuthorName = sharedShowAuthorName;
+      }
+    }
+
+    const sharedTtlMs = clampNumber(
+      input.ttlMs,
+      NUMERIC_FIELDS.ttlMs.min,
+      NUMERIC_FIELDS.ttlMs.max,
+      panelModeProfiles.closed.fullscreen.ttlMs,
+      NUMERIC_FIELDS.ttlMs.step
+    );
+    const sharedFadeMs = clampNumber(
+      input.fadeMs,
+      NUMERIC_FIELDS.fadeMs.min,
+      NUMERIC_FIELDS.fadeMs.max,
+      panelModeProfiles.closed.fullscreen.fadeMs,
+      NUMERIC_FIELDS.fadeMs.step
+    );
+    const sharedSequentialFadeSec = clampNumber(
+      input.sequentialFadeSec,
+      NUMERIC_FIELDS.sequentialFadeSec.min,
+      NUMERIC_FIELDS.sequentialFadeSec.max,
+      panelModeProfiles.closed.fullscreen.sequentialFadeSec,
+      NUMERIC_FIELDS.sequentialFadeSec.step
+    );
+    for (const panelState of PANEL_STATE_KEYS) {
+      for (const mode of MODE_KEYS) {
+        panelModeProfiles[panelState][mode].ttlMs = sharedTtlMs;
+        panelModeProfiles[panelState][mode].fadeMs = sharedFadeMs;
+        panelModeProfiles[panelState][mode].sequentialFadeSec = sharedSequentialFadeSec;
       }
     }
 
@@ -768,7 +854,8 @@
       },
       sharedProfileFields,
       modeProfiles: panelModeProfiles.closed,
-      panelModeProfiles
+      panelModeProfiles,
+      youtubeApiKey: typeof input.youtubeApiKey === "string" ? input.youtubeApiKey : ""
     };
   }
 
@@ -881,6 +968,11 @@
         const fallback = meta ? meta.fallback : "#ffffff";
         node.value = normalizeColor(targetProfile[id], fallback);
       }
+    }
+
+    const apiKeyNode = document.getElementById(API_KEY_FIELD_ID);
+    if (apiKeyNode instanceof HTMLInputElement) {
+      apiKeyNode.value = String(currentSettings.youtubeApiKey || "");
     }
   }
 
@@ -1105,7 +1197,12 @@
     }
 
     if (PROFILE_CHECKBOX_IDS.includes(id) && target instanceof HTMLInputElement) {
-      updateCurrentProfileField(id, target.checked);
+      if (SHARED_PROFILE_CHECKBOX_IDS.includes(id)) {
+        updateFieldAcrossProfiles(id, target.checked);
+      } else {
+        updateCurrentProfileField(id, target.checked);
+      }
+      setProfileFields(getCurrentProfile());
       queueSave();
       return;
     }
@@ -1142,7 +1239,9 @@
       );
       target.value = String(clamped);
       const sharedKey = SHARED_NUMERIC_FIELDS[id];
-      if (sharedKey && isSharedFieldEnabled(sharedKey)) {
+      if (ALWAYS_SHARED_ANIMATION_NUMERIC_IDS.includes(id)) {
+        updateFieldAcrossProfiles(id, clamped);
+      } else if (sharedKey && isSharedFieldEnabled(sharedKey)) {
         updateFieldAcrossProfiles(id, clamped);
       } else if (id === "offsetXPx") {
         const profile = getCurrentProfile();
@@ -1183,6 +1282,12 @@
       }
       setProfileFields(getCurrentProfile());
       queueSave();
+    }
+
+    if (id === API_KEY_FIELD_ID && target instanceof HTMLInputElement) {
+      currentSettings.youtubeApiKey = String(target.value || "").trim();
+      queueSave();
+      return;
     }
   }
 
