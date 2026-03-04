@@ -297,6 +297,19 @@
       return value;
     }
 
+    function getRendererDataPayloadCandidates(renderer) {
+      return [
+        renderer ? renderer.data : null,
+        renderer && renderer.__data && typeof renderer.__data === "object"
+          ? renderer.__data.data
+          : null,
+        renderer ? renderer.__data : null,
+        renderer && renderer.polymerController ? renderer.polymerController.data : null,
+        renderer && renderer.polymerController ? renderer.polymerController.hostData : null,
+        renderer && renderer.inst ? renderer.inst.data : null
+      ];
+    }
+
     function readAuthorNameFromDataPayload(payload) {
       if (!payload || typeof payload !== "object") {
         return "";
@@ -341,22 +354,83 @@
     }
 
     function resolveDataDisplayName(renderer, authorHandle) {
-      const candidates = [
-        renderer ? renderer.data : null,
-        renderer && renderer.__data && typeof renderer.__data === "object"
-          ? renderer.__data.data
-          : null,
-        renderer ? renderer.__data : null,
-        renderer && renderer.polymerController ? renderer.polymerController.data : null,
-        renderer && renderer.polymerController ? renderer.polymerController.hostData : null,
-        renderer && renderer.inst ? renderer.inst.data : null
-      ];
+      const candidates = getRendererDataPayloadCandidates(renderer);
 
       for (const candidate of candidates) {
         const raw = readAuthorNameFromDataPayload(candidate);
         const resolved = extractDisplayNameCandidate(raw, authorHandle);
         if (resolved) {
           return resolved;
+        }
+      }
+
+      return "";
+    }
+
+    function normalizeMessageIdCandidate(value) {
+      const normalized = String(value || "").trim();
+      if (!normalized) {
+        return "";
+      }
+      if (normalized.toLowerCase() === "message") {
+        return "";
+      }
+      return normalized;
+    }
+
+    function readMessageIdFromDataPayload(payload) {
+      if (!payload || typeof payload !== "object") {
+        return "";
+      }
+
+      const directKeys = ["id", "messageId", "clientMessageId", "itemId", "chatItemId"];
+      const nestedKeys = [
+        "data",
+        "item",
+        "liveChatTextMessageRenderer",
+        "liveChatPaidMessageRenderer",
+        "liveChatLegacyPaidMessageRenderer",
+        "liveChatMembershipItemRenderer",
+        "liveChatPaidStickerRenderer",
+        "liveChatViewerEngagementMessageRenderer",
+        "liveChatModeChangeMessageRenderer",
+        "liveChatSponsorshipsGiftPurchaseAnnouncementRenderer",
+        "liveChatSponsorshipsGiftRedemptionAnnouncementRenderer",
+        "liveChatMembershipGiftPurchaseAnnouncementRenderer",
+        "liveChatMembershipGiftRedemptionAnnouncementRenderer",
+        "liveChatBannerChatSummaryRenderer"
+      ];
+
+      const queue = [{ value: payload, depth: 0 }];
+      const visited = new Set();
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current || !current.value || typeof current.value !== "object") {
+          continue;
+        }
+
+        const target = current.value;
+        if (visited.has(target)) {
+          continue;
+        }
+        visited.add(target);
+
+        for (const key of directKeys) {
+          const messageId = normalizeMessageIdCandidate(target[key]);
+          if (messageId) {
+            return messageId;
+          }
+        }
+
+        if (current.depth >= 2) {
+          continue;
+        }
+
+        for (const nestedKey of nestedKeys) {
+          const child = target[nestedKey];
+          if (child && typeof child === "object") {
+            queue.push({ value: child, depth: current.depth + 1 });
+          }
         }
       }
 
@@ -827,14 +901,35 @@
       return String(Math.floor(timestampMs / 1000));
     }
 
-    function buildMessageId(renderer, type, authorName, text, timestampToken) {
-      const directId =
-        renderer.getAttribute("data-id") ||
-        renderer.getAttribute("data-item-id") ||
-        renderer.getAttribute("data-message-id") ||
-        renderer.getAttribute("id");
+    function resolveDirectMessageId(renderer) {
+      const directIdCandidates = [
+        renderer.getAttribute("data-id"),
+        renderer.getAttribute("data-item-id"),
+        renderer.getAttribute("data-message-id"),
+        renderer.getAttribute("id")
+      ];
 
-      if (directId && directId !== "message") {
+      for (const candidate of directIdCandidates) {
+        const normalized = normalizeMessageIdCandidate(candidate);
+        if (normalized) {
+          return normalized;
+        }
+      }
+
+      const payloadCandidates = getRendererDataPayloadCandidates(renderer);
+      for (const payload of payloadCandidates) {
+        const resolved = readMessageIdFromDataPayload(payload);
+        if (resolved) {
+          return resolved;
+        }
+      }
+
+      return "";
+    }
+
+    function buildMessageId(renderer, type, authorName, text, timestampToken) {
+      const directId = resolveDirectMessageId(renderer);
+      if (directId) {
         return `${type}|${directId}`;
       }
 
